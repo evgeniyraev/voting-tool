@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="An anonymous, peer-to-peer ranked choice voting experience."
+    />
+    <title>Common Ground — Anonymous STV voting</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="grain"></div>
+    <header class="site-header">
+      <a class="brand" href="#" aria-label="Common Ground home">
+        <span class="brand-mark">
+          <i></i><i></i><i></i>
+        </span>
+        <span>common<br />ground</span>
+      </a>
+      <div class="session-meta">
+        <span class="privacy-pill"><i></i> End-to-end encrypted</span>
+        <button class="icon-button" id="themeButton" aria-label="Toggle color theme">◐</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Anonymous collective decisions</p>
+          <h1>Find the choice<br /><em>everyone</em> can live with.</h1>
+          <p class="hero-text">
+            Rank the options in your order of preference. Your ballot is sent
+            directly to the group and counted without revealing who you are.
+          </p>
+        </div>
+
+        <aside class="room-card">
+          <div class="room-card-top">
+            <div>
+              <span class="label">Live room</span>
+              <strong id="roomName">Friday team lunch</strong>
+            </div>
+            <span class="live-dot">Live</span>
+          </div>
+          <div class="room-code-row">
+            <code id="roomCode">LIME–742</code>
+            <button id="copyRoom" class="copy-button">Copy invite</button>
+          </div>
+          <div class="peer-row">
+            <div class="peer-faces" id="peerFaces">
+              <span style="--face: #ff7657">A</span>
+              <span style="--face: #3e8e78">M</span>
+              <span style="--face: #7079b9">J</span>
+              <span class="more">+1</span>
+            </div>
+            <p><strong id="peerCount">4</strong> anonymous peers connected</p>
+          </div>
+        </aside>
+      </section>
+
+      <nav class="progress-nav" aria-label="Voting progress">
+        <button class="progress-step active" data-view="ballot">
+          <span>01</span><b>Rank choices</b>
+        </button>
+        <div class="progress-line"></div>
+        <button class="progress-step" data-view="waiting">
+          <span>02</span><b>Wait for group</b>
+        </button>
+        <div class="progress-line"></div>
+        <button class="progress-step" data-view="results">
+          <span>03</span><b>See the result</b>
+        </button>
+      </nav>
+
+      <section class="view active" id="ballotView">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Your private ballot</p>
+            <h2>What’s your preference?</h2>
+          </div>
+          <p>Drag to order from <strong>most preferred</strong> to least preferred.</p>
+        </div>
+
+        <div class="ballot-layout">
+          <div class="ranking-card">
+            <div class="ranking-labels">
+              <span>Most preferred</span>
+              <span>Least preferred</span>
+            </div>
+            <ol class="candidate-list" id="candidateList"></ol>
+            <button class="primary-button" id="submitVote">
+              <span>Submit anonymous ballot</span>
+              <span class="arrow">→</span>
+            </button>
+            <p class="lock-note">⌁ Your identity is never attached to your ballot.</p>
+          </div>
+
+          <aside class="how-card">
+            <p class="eyebrow">How it works</p>
+            <h3>Better than “pick one.”</h3>
+            <div class="mini-step">
+              <span>1</span>
+              <div><strong>You rank</strong><p>Put every option in your preferred order.</p></div>
+            </div>
+            <div class="mini-step">
+              <span>2</span>
+              <div><strong>Votes transfer</strong><p>If your top choice drops out, your vote moves to the next.</p></div>
+            </div>
+            <div class="mini-step">
+              <span>3</span>
+              <div><strong>A consensus wins</strong><p>The strongest broadly-supported choice rises to the top.</p></div>
+            </div>
+            <a href="https://en.wikipedia.org/wiki/Single_transferable_vote" target="_blank" rel="noreferrer">
+              Learn about single transferable vote ↗
+            </a>
+          </aside>
+        </div>
+      </section>
+
+      <section class="view waiting-view" id="waitingView">
+        <div class="waiting-orbit">
+          <div class="orbit orbit-one"></div>
+          <div class="orbit orbit-two"></div>
+          <div class="waiting-center"><span id="waitingCount">1</span><small>ballot<br />received</small></div>
+        </div>
+        <p class="eyebrow">Ballot safely received</p>
+        <h2>Waiting for the group.</h2>
+        <p>Your anonymous ballot is locked in. Results unlock when everyone has voted.</p>
+        <div class="waiting-actions">
+          <button class="secondary-button" id="addDemoVote">Simulate another voter</button>
+          <button class="primary-button compact" id="countNow">Count votes now <span>→</span></button>
+        </div>
+      </section>
+
+      <section class="view results-view" id="resultsView">
+        <div class="result-hero">
+          <div class="winner-badge">Consensus reached</div>
+          <p class="eyebrow">The group chose</p>
+          <h2 id="winnerName">Greenhouse Café</h2>
+          <p id="winnerDetail">Won after 3 rounds with broad support across the group.</p>
+          <div class="winner-score">
+            <div class="score-ring"><strong id="winnerVotes">4</strong><span>final votes</span></div>
+            <div><strong id="winnerPercent">67%</strong><span>of active ballots</span></div>
+          </div>
+        </div>
+        <div class="rounds-section">
+          <div class="section-heading">
+            <div><p class="eyebrow">Transparent count</p><h2>How the vote moved</h2></div>
+            <p>When an option is eliminated, each ballot moves to its next available preference.</p>
+          </div>
+          <div class="rounds-list" id="roundsList"></div>
+          <button class="secondary-button" id="restartVote">Start a new ballot</button>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
