@@ -20,6 +20,8 @@ const state = {
 const candidateList = document.querySelector("#candidateList");
 const toast = document.querySelector("#toast");
 const connectionStatus = document.querySelector("#connectionStatus");
+const copyRoomButton = document.querySelector("#copyRoom");
+const HOST_STORAGE_KEY = "common-ground-host-id";
 
 function randomRoomCode() {
   const words = ["LIME", "MINT", "SAGE", "FERN", "PINE", "MOSS"];
@@ -30,7 +32,11 @@ function readRoomLink() {
   const params = new URLSearchParams(location.hash.slice(1));
   state.roomCode = params.get("room") || randomRoomCode();
   state.hostId = params.get("host");
-  state.isHost = !state.hostId;
+  state.isHost = !state.hostId || sessionStorage.getItem(HOST_STORAGE_KEY) === state.hostId;
+  if (!state.hostId) {
+    state.hostId = `common-ground-${crypto.randomUUID()}`;
+    sessionStorage.setItem(HOST_STORAGE_KEY, state.hostId);
+  }
   document.querySelector("#roomCode").textContent = state.roomCode.replace("-", "–");
 }
 
@@ -158,16 +164,19 @@ function setupPeerChannel() {
     showToast("Could not load the room service");
     return;
   }
-  state.peer = new Peer();
+  state.peer = new Peer(state.isHost ? state.hostId : undefined);
   state.peer.on("open", (peerId) => {
     state.peerId = peerId;
     if (state.isHost) {
       state.hostId = peerId;
+      sessionStorage.setItem(HOST_STORAGE_KEY, peerId);
       writeRoomLink();
     } else {
       connectToPeer(state.hostId);
     }
     connectionStatus.textContent = "Live";
+    copyRoomButton.disabled = false;
+    copyRoomButton.textContent = "Copy invite";
     updatePeerCount();
   });
   state.peer.on("connection", registerConnection);
@@ -176,9 +185,22 @@ function setupPeerChannel() {
     state.peer.reconnect();
   });
   state.peer.on("error", (error) => {
-    connectionStatus.textContent = "Connection issue";
-    showToast(error.type === "peer-unavailable" ? "Room host is no longer online" : "Could not connect to the room");
+    if (error.type === "peer-unavailable") {
+      connectionStatus.textContent = "Host offline";
+      copyRoomButton.disabled = false;
+      copyRoomButton.textContent = "Start new room";
+      showToast("Room host is no longer online");
+    } else {
+      connectionStatus.textContent = "Connection issue";
+      showToast("Could not connect to the room");
+    }
   });
+}
+
+function startNewRoom() {
+  sessionStorage.removeItem(HOST_STORAGE_KEY);
+  location.hash = "";
+  location.reload();
 }
 
 function submitBallot() {
@@ -259,7 +281,8 @@ function renderResults() {
 
 document.querySelector("#submitVote").addEventListener("click", submitBallot);
 document.querySelector("#countNow").addEventListener("click", renderResults);
-document.querySelector("#copyRoom").addEventListener("click", async () => {
+copyRoomButton.addEventListener("click", async () => {
+  if (copyRoomButton.textContent === "Start new room") return startNewRoom();
   if (!state.hostId) return showToast("Room is still connecting");
   await navigator.clipboard?.writeText(location.href);
   showToast("Invite link copied — send it to your voters");

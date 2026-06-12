@@ -92,6 +92,7 @@ h1 em::after { content: ""; position: absolute; left: 0; bottom: 4px; width: 100
 .room-code-row { margin: 24px 0; padding: 17px 0; border-block: 1px solid rgba(255,255,255,.15); }
 .room-code-row code { font-family: Manrope, sans-serif; font-size: 25px; font-weight: 800; letter-spacing: .08em; }
 .copy-button { border: 0; border-radius: 999px; padding: 8px 11px; font-size: 11px; font-weight: 700; cursor: pointer; background: var(--lime); color: var(--ink); }
+.copy-button:disabled { cursor: wait; opacity: .55; }
 .peer-row { justify-content: flex-start; }
 .peer-faces { display: flex; padding-left: 6px; }
 .peer-faces span { width: 26px; height: 26px; margin-left: -6px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--green); background: var(--face); font-size: 9px; font-weight: 800; }
