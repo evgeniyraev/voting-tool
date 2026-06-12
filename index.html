@@ -75,7 +75,7 @@
           <span>02</span><b>Wait for group</b>
         </button>
         <div class="progress-line"></div>
-        <button class="progress-step" data-view="results">
+        <button class="progress-step" id="resultsStep" data-view="results">
           <span>03</span><b>See the result</b>
         </button>
       </nav>
@@ -133,7 +133,7 @@
         </div>
         <p class="eyebrow">Ballot safely received</p>
         <h2>Waiting for the group.</h2>
-        <p>Your anonymous ballot is locked in. Results unlock when everyone has voted.</p>
+        <p id="waitingMessage">Your anonymous ballot is locked in. Results unlock when everyone has voted.</p>
         <div class="waiting-actions">
           <button class="primary-button compact" id="countNow">Count votes now <span>→</span></button>
         </div>

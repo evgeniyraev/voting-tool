@@ -11,6 +11,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { scroll-behavior: smooth; }
 body {
   margin: 0;
@@ -104,6 +105,7 @@ h1 em::after { content: ""; position: absolute; left: 0; bottom: 4px; width: 100
 .progress-step b { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
 .progress-step.active { color: var(--green); }
 .progress-step.active span { background: var(--green); color: white; border-color: var(--green); }
+.progress-step:disabled { cursor: default; opacity: .5; }
 .progress-line { height: 1px; background: var(--line); flex: 1; margin: 0 18px; }
 .view { display: none; }
 .view.active { display: block; animation: rise .55s ease both; }

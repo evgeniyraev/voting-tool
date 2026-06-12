@@ -98,7 +98,7 @@ function currentBallot() {
   return [...candidateList.querySelectorAll(".candidate")].map((item) => item.dataset.id);
 }
 
-function receivePeerMessage(message) {
+function receivePeerMessage(message, senderId = null) {
   if (message.type === "ballot" && !state.ballots.some((ballot) => ballot.peerId === message.peerId)) {
     state.ballots.push({ peerId: message.peerId, ranking: message.ranking });
     updateWaiting();
@@ -111,6 +111,8 @@ function receivePeerMessage(message) {
       if (peerId !== state.peerId && !state.peers.has(peerId)) connectToPeer(peerId);
     });
     updateWaiting();
+  } else if (message.type === "count-results" && senderId === state.hostId) {
+    renderResults(false);
   }
 }
 
@@ -139,7 +141,7 @@ function registerConnection(connection) {
     updatePeerCount();
   });
   connection.on("data", (message) => {
-    receivePeerMessage(message);
+    receivePeerMessage(message, connection.peer);
     if (message.type === "ballot") sendToAll(message, connection.peer);
   });
   connection.on("close", () => {
@@ -159,6 +161,7 @@ function connectToPeer(peerId) {
 
 function setupPeerChannel() {
   readRoomLink();
+  configureRoleUI();
   if (!window.Peer) {
     connectionStatus.textContent = "Offline";
     showToast("Could not load the room service");
@@ -195,6 +198,19 @@ function setupPeerChannel() {
       showToast("Could not connect to the room");
     }
   });
+}
+
+function configureRoleUI() {
+  const countButton = document.querySelector("#countNow");
+  const resultsStep = document.querySelector("#resultsStep");
+  const restartButton = document.querySelector("#restartVote");
+  countButton.hidden = !state.isHost;
+  restartButton.hidden = !state.isHost;
+  resultsStep.disabled = !state.isHost;
+  if (!state.isHost) {
+    document.querySelector("#waitingMessage").textContent =
+      "Your anonymous ballot is locked in. The inviter will reveal the result when voting is complete.";
+  }
 }
 
 function startNewRoom() {
@@ -247,7 +263,9 @@ function countSTV(ballots) {
   return { winner, votes: finalCount, majority, rounds };
 }
 
-function renderResults() {
+function renderResults(announce = false) {
+  if (!state.ballots.length) return showToast("No ballots have been submitted yet");
+  if (announce && !state.isHost) return showToast("Only the inviter can count votes");
   const result = countSTV(state.ballots);
   const winner = candidates.find((candidate) => candidate.id === result.winner);
   document.querySelector("#winnerName").textContent = winner.name;
@@ -277,10 +295,11 @@ function renderResults() {
     roundsList.appendChild(card);
   });
   switchView("results");
+  if (announce) sendToAll({ type: "count-results" });
 }
 
 document.querySelector("#submitVote").addEventListener("click", submitBallot);
-document.querySelector("#countNow").addEventListener("click", renderResults);
+document.querySelector("#countNow").addEventListener("click", () => renderResults(true));
 copyRoomButton.addEventListener("click", async () => {
   if (copyRoomButton.textContent === "Start new room") return startNewRoom();
   if (!state.hostId) return showToast("Room is still connecting");
@@ -294,7 +313,7 @@ document.querySelector("#restartVote").addEventListener("click", () => {
   switchView("ballot");
 });
 document.querySelectorAll(".progress-step").forEach((step) => step.addEventListener("click", () => {
-  if (step.dataset.view === "results" && state.ballots.length) renderResults();
+  if (step.dataset.view === "results" && state.ballots.length && state.isHost) renderResults(true);
   else if (step.dataset.view !== "results") switchView(step.dataset.view);
 }));
 

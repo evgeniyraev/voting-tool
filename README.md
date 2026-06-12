@@ -8,6 +8,7 @@ single-winner transferable vote count.
 - Drag-to-rank ballot
 - Peer-to-peer ballot sharing through WebRTC data channels
 - Single transferable vote elimination and transfer rounds
+- Host-only vote counting with automatic result reveal
 - Transparent round-by-round results
 - Responsive light and dark themes
 
