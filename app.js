@@ -6,24 +6,38 @@ const candidates = [
   { id: "picnic", name: "Park Picnic", detail: "Bring-your-own · 5 min walk", icon: "☀️", color: "#eee4a9" },
 ];
 
-const demoBallots = [
-  ["little-italy", "greenhouse", "noodle-club", "harbor", "picnic"],
-  ["noodle-club", "greenhouse", "picnic", "little-italy", "harbor"],
-  ["harbor", "greenhouse", "little-italy", "noodle-club", "picnic"],
-  ["greenhouse", "picnic", "noodle-club", "harbor", "little-italy"],
-  ["picnic", "greenhouse", "little-italy", "noodle-club", "harbor"],
-];
-
 const state = {
   ballots: [],
   dragging: null,
-  signalChannel: null,
   peers: new Map(),
-  peerId: crypto.randomUUID(),
+  peer: null,
+  peerId: null,
+  hostId: null,
+  roomCode: null,
+  isHost: false,
 };
 
 const candidateList = document.querySelector("#candidateList");
 const toast = document.querySelector("#toast");
+const connectionStatus = document.querySelector("#connectionStatus");
+
+function randomRoomCode() {
+  const words = ["LIME", "MINT", "SAGE", "FERN", "PINE", "MOSS"];
+  return `${words[Math.floor(Math.random() * words.length)]}-${Math.floor(100 + Math.random() * 900)}`;
+}
+
+function readRoomLink() {
+  const params = new URLSearchParams(location.hash.slice(1));
+  state.roomCode = params.get("room") || randomRoomCode();
+  state.hostId = params.get("host");
+  state.isHost = !state.hostId;
+  document.querySelector("#roomCode").textContent = state.roomCode.replace("-", "–");
+}
+
+function writeRoomLink() {
+  const params = new URLSearchParams({ room: state.roomCode, host: state.hostId });
+  history.replaceState(null, "", `${location.pathname}${location.search}#${params}`);
+}
 
 function renderCandidates() {
   candidateList.innerHTML = "";
@@ -83,73 +97,96 @@ function receivePeerMessage(message) {
     state.ballots.push({ peerId: message.peerId, ranking: message.ranking });
     updateWaiting();
     showToast("An anonymous peer submitted a ballot");
+  } else if (message.type === "sync") {
+    message.ballots.forEach((ballot) => {
+      if (!state.ballots.some((existing) => existing.peerId === ballot.peerId)) state.ballots.push(ballot);
+    });
+    message.peerIds.forEach((peerId) => {
+      if (peerId !== state.peerId && !state.peers.has(peerId)) connectToPeer(peerId);
+    });
+    updateWaiting();
   }
 }
 
-function registerDataChannel(peerId, channel) {
-  const peer = state.peers.get(peerId);
-  if (!peer) return;
-  peer.channel = channel;
-  channel.addEventListener("message", ({ data }) => receivePeerMessage(JSON.parse(data)));
-  channel.addEventListener("open", updatePeerCount);
-  channel.addEventListener("close", updatePeerCount);
+function sendToAll(message, exceptPeerId = null) {
+  state.peers.forEach((connection, peerId) => {
+    if (peerId !== exceptPeerId && connection.open) connection.send(message);
+  });
 }
 
 function updatePeerCount() {
-  const connected = [...state.peers.values()].filter((peer) => peer.channel?.readyState === "open").length + 1;
+  const connected = [...state.peers.values()].filter((connection) => connection.open).length + 1;
   document.querySelector("#peerCount").textContent = connected;
+  document.querySelector(".peer-row p").lastChild.textContent =
+    ` anonymous peer${connected === 1 ? "" : "s"} connected`;
 }
 
-async function createPeer(peerId, initiator) {
-  if (state.peers.has(peerId)) return state.peers.get(peerId).connection;
-  const connection = new RTCPeerConnection();
-  state.peers.set(peerId, { connection, channel: null });
-
-  connection.addEventListener("icecandidate", ({ candidate }) => {
-    if (candidate) state.signalChannel.postMessage({ type: "ice", from: state.peerId, to: peerId, candidate });
+function registerConnection(connection) {
+  if (state.peers.has(connection.peer)) return;
+  state.peers.set(connection.peer, connection);
+  connection.on("open", () => {
+    connection.send({
+      type: "sync",
+      ballots: state.ballots,
+      peerIds: [state.hostId, ...state.peers.keys()].filter(Boolean),
+    });
+    updatePeerCount();
   });
-  connection.addEventListener("datachannel", ({ channel }) => registerDataChannel(peerId, channel));
-  connection.addEventListener("connectionstatechange", updatePeerCount);
+  connection.on("data", (message) => {
+    receivePeerMessage(message);
+    if (message.type === "ballot") sendToAll(message, connection.peer);
+  });
+  connection.on("close", () => {
+    state.peers.delete(connection.peer);
+    updatePeerCount();
+  });
+  connection.on("error", () => {
+    state.peers.delete(connection.peer);
+    updatePeerCount();
+  });
+}
 
-  if (initiator) {
-    registerDataChannel(peerId, connection.createDataChannel("anonymous-ballots"));
-    const offer = await connection.createOffer();
-    await connection.setLocalDescription(offer);
-    state.signalChannel.postMessage({ type: "offer", from: state.peerId, to: peerId, description: offer });
-  }
-  return connection;
+function connectToPeer(peerId) {
+  if (!peerId || peerId === state.peerId || state.peers.has(peerId)) return;
+  registerConnection(state.peer.connect(peerId, { reliable: true }));
 }
 
 function setupPeerChannel() {
-  if (!("BroadcastChannel" in window)) return;
-  state.signalChannel = new BroadcastChannel("common-ground-lime-742-signal");
-  state.signalChannel.addEventListener("message", async ({ data }) => {
-    if (data.from === state.peerId || (data.to && data.to !== state.peerId)) return;
-    if (data.type === "hello") {
-      if (state.peerId < data.from) await createPeer(data.from, true);
-    } else if (data.type === "offer") {
-      const connection = await createPeer(data.from, false);
-      await connection.setRemoteDescription(data.description);
-      const answer = await connection.createAnswer();
-      await connection.setLocalDescription(answer);
-      state.signalChannel.postMessage({ type: "answer", from: state.peerId, to: data.from, description: answer });
-    } else if (data.type === "answer") {
-      await state.peers.get(data.from)?.connection.setRemoteDescription(data.description);
-    } else if (data.type === "ice") {
-      await state.peers.get(data.from)?.connection.addIceCandidate(data.candidate);
+  readRoomLink();
+  if (!window.Peer) {
+    connectionStatus.textContent = "Offline";
+    showToast("Could not load the room service");
+    return;
+  }
+  state.peer = new Peer();
+  state.peer.on("open", (peerId) => {
+    state.peerId = peerId;
+    if (state.isHost) {
+      state.hostId = peerId;
+      writeRoomLink();
+    } else {
+      connectToPeer(state.hostId);
     }
+    connectionStatus.textContent = "Live";
+    updatePeerCount();
   });
-  state.signalChannel.postMessage({ type: "hello", from: state.peerId });
+  state.peer.on("connection", registerConnection);
+  state.peer.on("disconnected", () => {
+    connectionStatus.textContent = "Reconnecting";
+    state.peer.reconnect();
+  });
+  state.peer.on("error", (error) => {
+    connectionStatus.textContent = "Connection issue";
+    showToast(error.type === "peer-unavailable" ? "Room host is no longer online" : "Could not connect to the room");
+  });
 }
 
 function submitBallot() {
+  if (!state.peerId) return showToast("Wait for the room to finish connecting");
   if (state.ballots.some((ballot) => ballot.peerId === state.peerId)) return;
   const ranking = currentBallot();
   state.ballots.push({ peerId: state.peerId, ranking });
-  const message = JSON.stringify({ type: "ballot", peerId: state.peerId, ranking });
-  state.peers.forEach((peer) => {
-    if (peer.channel?.readyState === "open") peer.channel.send(message);
-  });
+  sendToAll({ type: "ballot", peerId: state.peerId, ranking });
   updateWaiting();
   switchView("waiting");
 }
@@ -157,14 +194,7 @@ function submitBallot() {
 function updateWaiting() {
   const count = state.ballots.length;
   document.querySelector("#waitingCount").textContent = count;
-  document.querySelector("#peerCount").textContent = Math.max(4, count);
-}
-
-function addDemoVote() {
-  const next = demoBallots[state.ballots.length % demoBallots.length];
-  state.ballots.push({ peerId: `demo-${state.ballots.length}`, ranking: next });
-  updateWaiting();
-  showToast("Anonymous demo ballot received");
+  updatePeerCount();
 }
 
 function countSTV(ballots) {
@@ -196,9 +226,6 @@ function countSTV(ballots) {
 }
 
 function renderResults() {
-  if (state.ballots.length < 2) {
-    demoBallots.slice(0, 4).forEach((ranking, index) => state.ballots.push({ peerId: `auto-${index}`, ranking }));
-  }
   const result = countSTV(state.ballots);
   const winner = candidates.find((candidate) => candidate.id === result.winner);
   document.querySelector("#winnerName").textContent = winner.name;
@@ -231,11 +258,11 @@ function renderResults() {
 }
 
 document.querySelector("#submitVote").addEventListener("click", submitBallot);
-document.querySelector("#addDemoVote").addEventListener("click", addDemoVote);
 document.querySelector("#countNow").addEventListener("click", renderResults);
 document.querySelector("#copyRoom").addEventListener("click", async () => {
-  await navigator.clipboard?.writeText(`${location.href.split("#")[0]}#LIME-742`);
-  showToast("Invite link copied");
+  if (!state.hostId) return showToast("Room is still connecting");
+  await navigator.clipboard?.writeText(location.href);
+  showToast("Invite link copied — send it to your voters");
 });
 document.querySelector("#themeButton").addEventListener("click", () => document.body.classList.toggle("dark"));
 document.querySelector("#restartVote").addEventListener("click", () => {

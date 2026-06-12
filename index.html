@@ -48,10 +48,10 @@
               <span class="label">Live room</span>
               <strong id="roomName">Friday team lunch</strong>
             </div>
-            <span class="live-dot">Live</span>
+            <span class="live-dot" id="connectionStatus">Connecting</span>
           </div>
           <div class="room-code-row">
-            <code id="roomCode">LIME–742</code>
+            <code id="roomCode">OPENING…</code>
             <button id="copyRoom" class="copy-button">Copy invite</button>
           </div>
           <div class="peer-row">
@@ -61,7 +61,7 @@
               <span style="--face: #7079b9">J</span>
               <span class="more">+1</span>
             </div>
-            <p><strong id="peerCount">4</strong> anonymous peers connected</p>
+            <p><strong id="peerCount">1</strong> anonymous peer connected</p>
           </div>
         </aside>
       </section>
@@ -135,7 +135,6 @@
         <h2>Waiting for the group.</h2>
         <p>Your anonymous ballot is locked in. Results unlock when everyone has voted.</p>
         <div class="waiting-actions">
-          <button class="secondary-button" id="addDemoVote">Simulate another voter</button>
           <button class="primary-button compact" id="countNow">Count votes now <span>→</span></button>
         </div>
       </section>
@@ -163,6 +162,7 @@
     </main>
 
     <div class="toast" id="toast" role="status"></div>
+    <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

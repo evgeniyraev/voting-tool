@@ -19,9 +19,18 @@ python3 -m http.server 4173
 
 Open `http://127.0.0.1:4173`.
 
-## Prototype networking
+## Invite others
 
-WebRTC offer and answer signaling currently uses `BroadcastChannel`, which
-connects tabs on the same origin. A production deployment needs a signaling
-service plus STUN/TURN configuration for peers on different devices and
-networks.
+Open the app and click **Copy invite**. Anyone opening that room link can join
+from another browser or device while the room host remains online.
+
+Keep the original host tab open until voting and counting are finished. If the
+host closes the room, new participants cannot join through its invite link.
+
+The static GitHub Pages frontend uses the hosted PeerJS signaling service to
+introduce room participants. Ballots are exchanged directly between browsers
+over encrypted WebRTC data channels and are not stored by this app.
+
+This is still a prototype. For high-stakes elections, use an authenticated
+signaling service, a dedicated TURN service, durable encrypted ballot storage,
+and independent security review.
