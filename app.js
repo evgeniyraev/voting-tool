@@ -21,6 +21,9 @@ const candidateList = document.querySelector("#candidateList");
 const toast = document.querySelector("#toast");
 const connectionStatus = document.querySelector("#connectionStatus");
 const copyRoomButton = document.querySelector("#copyRoom");
+const showQrButton = document.querySelector("#showQr");
+const qrDialog = document.querySelector("#qrDialog");
+const qrCode = document.querySelector("#qrCode");
 const HOST_STORAGE_KEY = "common-ground-host-id";
 
 function randomRoomCode() {
@@ -58,6 +61,7 @@ function renderCandidates() {
       <span class="support">Rank this choice</span>
       <span class="handle">⠿</span>
     `;
+    const handle = item.querySelector(".handle");
     item.addEventListener("dragstart", () => {
       state.dragging = item;
       requestAnimationFrame(() => item.classList.add("dragging"));
@@ -66,17 +70,82 @@ function renderCandidates() {
       item.classList.remove("dragging");
       state.dragging = null;
     });
+    handle.addEventListener("touchstart", (event) => startTouchDrag(event, item), { passive: false });
     candidateList.appendChild(item);
   });
 }
 
-candidateList.addEventListener("dragover", (event) => {
-  event.preventDefault();
-  const after = [...candidateList.querySelectorAll(".candidate:not(.dragging)")].find((item) => {
+function findDropTarget(clientY) {
+  return [...candidateList.querySelectorAll(".candidate:not(.dragging):not(.touch-placeholder)")].find((item) => {
     const box = item.getBoundingClientRect();
-    return event.clientY < box.top + box.height / 2;
+    return clientY < box.top + box.height / 2;
   });
-  candidateList.insertBefore(state.dragging, after || null);
+}
+
+function movePlaceholder(item, target) {
+  if (target === item.nextElementSibling || (!target && item === candidateList.lastElementChild)) return;
+  const positions = new Map(
+    [...candidateList.children].map((candidate) => [candidate, candidate.getBoundingClientRect().top]),
+  );
+  candidateList.insertBefore(item, target);
+  [...candidateList.children].forEach((candidate) => {
+    const offset = positions.get(candidate) - candidate.getBoundingClientRect().top;
+    if (!offset) return;
+    candidate.style.transition = "none";
+    candidate.style.transform = `translateY(${offset}px)`;
+    requestAnimationFrame(() => {
+      candidate.style.transition = "";
+      candidate.style.transform = "";
+    });
+  });
+}
+
+function startTouchDrag(event, item) {
+  const touch = event.changedTouches[0];
+  if (!touch) return;
+  event.preventDefault();
+  state.dragging = item;
+  const touchId = touch.identifier;
+  const box = item.getBoundingClientRect();
+  const fingerOffsetY = touch.clientY - box.top;
+  const preview = item.cloneNode(true);
+
+  item.classList.add("touch-placeholder");
+  preview.classList.add("touch-preview");
+  preview.removeAttribute("draggable");
+  preview.style.width = `${box.width}px`;
+  preview.style.left = `${box.left}px`;
+  preview.style.top = `${touch.clientY - fingerOffsetY}px`;
+  document.body.appendChild(preview);
+
+  const move = (moveEvent) => {
+    const activeTouch = Array.from(moveEvent.changedTouches).find((current) => current.identifier === touchId);
+    if (!activeTouch) return;
+    moveEvent.preventDefault();
+    preview.style.top = `${activeTouch.clientY - fingerOffsetY}px`;
+    movePlaceholder(item, findDropTarget(activeTouch.clientY) || null);
+    if (activeTouch.clientY < 90) window.scrollBy(0, -12);
+    if (activeTouch.clientY > window.innerHeight - 90) window.scrollBy(0, 12);
+  };
+  const end = (endEvent) => {
+    if (!Array.from(endEvent.changedTouches).some((current) => current.identifier === touchId)) return;
+    item.classList.remove("touch-placeholder");
+    preview.remove();
+    state.dragging = null;
+    document.removeEventListener("touchmove", move);
+    document.removeEventListener("touchend", end);
+    document.removeEventListener("touchcancel", end);
+  };
+
+  document.addEventListener("touchmove", move, { passive: false });
+  document.addEventListener("touchend", end);
+  document.addEventListener("touchcancel", end);
+}
+
+candidateList.addEventListener("dragover", (event) => {
+  if (!state.dragging) return;
+  event.preventDefault();
+  candidateList.insertBefore(state.dragging, findDropTarget(event.clientY) || null);
 });
 
 function showToast(message) {
@@ -180,6 +249,7 @@ function setupPeerChannel() {
     connectionStatus.textContent = "Live";
     copyRoomButton.disabled = false;
     copyRoomButton.textContent = "Copy invite";
+    showQrButton.disabled = false;
     updatePeerCount();
   });
   state.peer.on("connection", registerConnection);
@@ -192,6 +262,7 @@ function setupPeerChannel() {
       connectionStatus.textContent = "Host offline";
       copyRoomButton.disabled = false;
       copyRoomButton.textContent = "Start new room";
+      showQrButton.disabled = true;
       showToast("Room host is no longer online");
     } else {
       connectionStatus.textContent = "Connection issue";
@@ -305,6 +376,24 @@ copyRoomButton.addEventListener("click", async () => {
   if (!state.hostId) return showToast("Room is still connecting");
   await navigator.clipboard?.writeText(location.href);
   showToast("Invite link copied — send it to your voters");
+});
+showQrButton.addEventListener("click", () => {
+  if (!window.QRCode) return showToast("Could not load the QR code generator");
+  qrCode.innerHTML = "";
+  document.querySelector("#qrRoomCode").textContent = state.roomCode;
+  new QRCode(qrCode, {
+    text: location.href,
+    width: 200,
+    height: 200,
+    colorDark: "#18251f",
+    colorLight: "#ffffff",
+    correctLevel: QRCode.CorrectLevel.M,
+  });
+  qrDialog.showModal();
+});
+document.querySelector("#closeQr").addEventListener("click", () => qrDialog.close());
+qrDialog.addEventListener("click", (event) => {
+  if (event.target === qrDialog) qrDialog.close();
 });
 document.querySelector("#themeButton").addEventListener("click", () => document.body.classList.toggle("dark"));
 document.querySelector("#restartVote").addEventListener("click", () => {

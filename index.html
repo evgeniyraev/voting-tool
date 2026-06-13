@@ -52,7 +52,14 @@
           </div>
           <div class="room-code-row">
             <code id="roomCode">OPENING…</code>
-            <button id="copyRoom" class="copy-button" disabled>Copy invite</button>
+            <div class="invite-actions">
+              <button id="copyRoom" class="copy-button" disabled>Copy invite</button>
+              <button id="showQr" class="qr-button" aria-label="Show invite QR code" disabled>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM15 14h2v2h-2zM19 14h2v4h-2zM14 19h4v2h-4zM19 20h2v1h-2z" />
+                </svg>
+              </button>
+            </div>
           </div>
           <div class="peer-row">
             <div class="peer-faces" id="peerFaces">
@@ -93,9 +100,11 @@
           <div class="ranking-card">
             <div class="ranking-labels">
               <span>Most preferred</span>
-              <span>Least preferred</span>
             </div>
             <ol class="candidate-list" id="candidateList"></ol>
+            <div class="ranking-labels ranking-labels-bottom">
+              <span>Least preferred</span>
+            </div>
             <button class="primary-button" id="submitVote">
               <span>Submit anonymous ballot</span>
               <span class="arrow">→</span>
@@ -161,8 +170,18 @@
       </section>
     </main>
 
+    <dialog class="qr-dialog" id="qrDialog">
+      <button class="qr-close" id="closeQr" aria-label="Close QR code">×</button>
+      <p class="eyebrow">Scan to join</p>
+      <h3>Open this voting room</h3>
+      <div class="qr-code" id="qrCode"></div>
+      <code id="qrRoomCode">ROOM</code>
+      <p>Keep this host tab open while participants join and vote.</p>
+    </dialog>
+
     <div class="toast" id="toast" role="status"></div>
     <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+    <script src="https://unpkg.com/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

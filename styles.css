@@ -92,8 +92,12 @@ h1 em::after { content: ""; position: absolute; left: 0; bottom: 4px; width: 100
 .live-dot { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.15); font-size: 10px; padding: 6px 9px; }
 .room-code-row { margin: 24px 0; padding: 17px 0; border-block: 1px solid rgba(255,255,255,.15); }
 .room-code-row code { font-family: Manrope, sans-serif; font-size: 25px; font-weight: 800; letter-spacing: .08em; }
+.invite-actions { display: flex; align-items: center; gap: 7px; }
 .copy-button { border: 0; border-radius: 999px; padding: 8px 11px; font-size: 11px; font-weight: 700; cursor: pointer; background: var(--lime); color: var(--ink); }
 .copy-button:disabled { cursor: wait; opacity: .55; }
+.qr-button { width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.25); border-radius: 50%; background: rgba(255,255,255,.12); color: white; cursor: pointer; }
+.qr-button svg { width: 16px; height: 16px; fill: currentColor; }
+.qr-button:disabled { cursor: wait; opacity: .4; }
 .peer-row { justify-content: flex-start; }
 .peer-faces { display: flex; padding-left: 6px; }
 .peer-faces span { width: 26px; height: 26px; margin-left: -6px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--green); background: var(--face); font-size: 9px; font-weight: 800; }
@@ -119,6 +123,7 @@ h1 em::after { content: ""; position: absolute; left: 0; bottom: 4px; width: 100
 }
 .ranking-card { padding: 14px; }
 .ranking-labels { display: flex; justify-content: space-between; color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .13em; padding: 5px 16px 10px 65px; }
+.ranking-labels-bottom { justify-content: flex-end; padding: 10px 16px 4px; }
 .candidate-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; counter-reset: rank; }
 .candidate {
   counter-increment: rank;
@@ -137,11 +142,28 @@ h1 em::after { content: ""; position: absolute; left: 0; bottom: 4px; width: 100
 .candidate::before { content: counter(rank); width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: var(--ink); color: white; font-family: Manrope; font-weight: 800; font-size: 12px; }
 .candidate:hover { transform: translateY(-2px); border-color: #a5afa9; box-shadow: 0 8px 18px rgba(34,50,42,.08); }
 .candidate.dragging { opacity: .45; }
+.candidate.touch-placeholder {
+  border: 2px dashed var(--green);
+  background: transparent;
+  box-shadow: none;
+}
+.candidate.touch-placeholder > *, .candidate.touch-placeholder::before { visibility: hidden; }
+.candidate.touch-preview {
+  position: fixed;
+  z-index: 20;
+  pointer-events: none;
+  opacity: .94;
+  border-color: var(--green);
+  box-shadow: 0 18px 40px rgba(34,50,42,.28);
+  transform: scale(1.025);
+  transition: none;
+}
 .candidate-art { width: 44px; height: 44px; border-radius: 11px; display: grid; place-items: center; font-size: 22px; background: var(--candidate); }
 .candidate strong { font-size: 14px; display: block; margin-bottom: 3px; }
 .candidate small { color: var(--muted); font-size: 10px; }
 .candidate .support { font-size: 9px; color: var(--green); text-transform: uppercase; letter-spacing: .08em; font-weight: 800; }
-.handle { color: #b4b9b5; font-size: 16px; letter-spacing: -2px; }
+.handle { color: #b4b9b5; font-size: 16px; letter-spacing: -2px; cursor: grab; touch-action: none; user-select: none; padding: 14px 8px; margin: -14px -8px; }
+.handle:active { cursor: grabbing; }
 .primary-button, .secondary-button {
   border: 0; border-radius: 12px; min-height: 54px; padding: 0 19px; font-weight: 800; font-size: 12px; cursor: pointer; transition: transform .2s, background .2s;
 }
@@ -194,6 +216,14 @@ h1 em::after { content: ""; position: absolute; left: 0; bottom: 4px; width: 100
 .bar-row.eliminated { opacity: .35; text-decoration: line-through; }
 .toast { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 20px); background: var(--ink); color: white; padding: 11px 16px; border-radius: 999px; font-size: 11px; font-weight: 700; opacity: 0; pointer-events: none; transition: .3s; z-index: 10; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
+.qr-dialog { width: min(390px, calc(100% - 32px)); border: 0; border-radius: 22px; padding: 30px; color: var(--ink); background: var(--card); box-shadow: 0 30px 80px rgba(19,34,26,.3); text-align: center; }
+.qr-dialog::backdrop { background: rgba(18,31,25,.62); backdrop-filter: blur(5px); }
+.qr-dialog h3 { font-size: 29px; margin-bottom: 22px; }
+.qr-dialog > p:last-child { color: var(--muted); font-size: 10px; line-height: 1.5; margin: 18px auto 0; max-width: 250px; }
+.qr-dialog code { display: block; margin-top: 18px; font-family: Manrope, sans-serif; font-weight: 800; letter-spacing: .12em; }
+.qr-code { width: 224px; height: 224px; display: grid; place-items: center; padding: 12px; margin: auto; border: 1px solid var(--line); border-radius: 14px; background: white; }
+.qr-code img, .qr-code canvas { max-width: 100%; height: auto !important; }
+.qr-close { position: absolute; top: 13px; right: 13px; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--ink); font-size: 22px; line-height: 1; cursor: pointer; }
 body.dark { --ink: #edf3ed; --muted: #a7b1aa; --paper: #14221c; --card: #1d2c25; --line: #36453e; --green: #7cdbad; --lime: #d6f06d; }
 body.dark .room-card, body.dark .primary-button, body.dark .candidate::before { background: #28624b; }
 body.dark .candidate { background: #24352d; border-color: #3b4b43; }
@@ -210,7 +240,7 @@ body.dark .candidate .support, body.dark .eyebrow, body.dark .how-card a { color
   .progress-step b { display: none; }
   .section-heading { display: block; }
   .section-heading > p { margin-top: 12px; }
-  .candidate { grid-template-columns: 34px 42px 1fr 14px; padding-inline: 8px; gap: 8px; }
+  .candidate { grid-template-columns: 34px 42px 1fr 26px; padding-inline: 8px; gap: 8px; }
   .candidate .support { display: none; }
   .waiting-actions { flex-direction: column; }
   .primary-button.compact { width: 100%; }
