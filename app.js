@@ -53,7 +53,7 @@ function renderCandidates() {
   candidates.forEach((candidate) => {
     const item = document.createElement("li");
     item.className = "candidate";
-    item.draggable = true;
+    item.draggable = matchMedia("(hover: hover) and (pointer: fine)").matches;
     item.dataset.id = candidate.id;
     item.innerHTML = `
       <span class="candidate-art" style="--candidate: ${candidate.color}">${candidate.icon}</span>
@@ -70,7 +70,7 @@ function renderCandidates() {
       item.classList.remove("dragging");
       state.dragging = null;
     });
-    handle.addEventListener("touchstart", (event) => startTouchDrag(event, item), { passive: false });
+    handle.addEventListener("pointerdown", (event) => startPointerDrag(event, item));
     candidateList.appendChild(item);
   });
 }
@@ -100,14 +100,13 @@ function movePlaceholder(item, target) {
   });
 }
 
-function startTouchDrag(event, item) {
-  const touch = event.changedTouches[0];
-  if (!touch) return;
+function startPointerDrag(event, item) {
+  if (event.pointerType === "mouse") return;
   event.preventDefault();
   state.dragging = item;
-  const touchId = touch.identifier;
+  const pointerId = event.pointerId;
   const box = item.getBoundingClientRect();
-  const fingerOffsetY = touch.clientY - box.top;
+  const fingerOffsetY = event.clientY - box.top;
   const preview = item.cloneNode(true);
 
   item.classList.add("touch-placeholder");
@@ -115,31 +114,30 @@ function startTouchDrag(event, item) {
   preview.removeAttribute("draggable");
   preview.style.width = `${box.width}px`;
   preview.style.left = `${box.left}px`;
-  preview.style.top = `${touch.clientY - fingerOffsetY}px`;
+  preview.style.top = `${event.clientY - fingerOffsetY}px`;
   document.body.appendChild(preview);
 
   const move = (moveEvent) => {
-    const activeTouch = Array.from(moveEvent.changedTouches).find((current) => current.identifier === touchId);
-    if (!activeTouch) return;
+    if (moveEvent.pointerId !== pointerId) return;
     moveEvent.preventDefault();
-    preview.style.top = `${activeTouch.clientY - fingerOffsetY}px`;
-    movePlaceholder(item, findDropTarget(activeTouch.clientY) || null);
-    if (activeTouch.clientY < 90) window.scrollBy(0, -12);
-    if (activeTouch.clientY > window.innerHeight - 90) window.scrollBy(0, 12);
+    preview.style.top = `${moveEvent.clientY - fingerOffsetY}px`;
+    movePlaceholder(item, findDropTarget(moveEvent.clientY) || null);
+    if (moveEvent.clientY < 90) window.scrollBy(0, -12);
+    if (moveEvent.clientY > window.innerHeight - 90) window.scrollBy(0, 12);
   };
   const end = (endEvent) => {
-    if (!Array.from(endEvent.changedTouches).some((current) => current.identifier === touchId)) return;
+    if (endEvent.pointerId !== pointerId) return;
     item.classList.remove("touch-placeholder");
     preview.remove();
     state.dragging = null;
-    document.removeEventListener("touchmove", move);
-    document.removeEventListener("touchend", end);
-    document.removeEventListener("touchcancel", end);
+    document.removeEventListener("pointermove", move);
+    document.removeEventListener("pointerup", end);
+    document.removeEventListener("pointercancel", end);
   };
 
-  document.addEventListener("touchmove", move, { passive: false });
-  document.addEventListener("touchend", end);
-  document.addEventListener("touchcancel", end);
+  document.addEventListener("pointermove", move, { passive: false });
+  document.addEventListener("pointerup", end);
+  document.addEventListener("pointercancel", end);
 }
 
 candidateList.addEventListener("dragover", (event) => {
