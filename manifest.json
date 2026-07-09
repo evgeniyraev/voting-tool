@@ -1,0 +1,18 @@
+{
+  "name": "Common Ground — Anonymous STV voting",
+  "short_name": "Common Ground",
+  "description": "Anonymous, peer-to-peer ranked choice voting.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f0e9",
+  "theme_color": "#1c654d",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

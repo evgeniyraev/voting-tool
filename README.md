@@ -5,12 +5,31 @@ single-winner transferable vote count.
 
 ## Features
 
+- Host-defined votes: the room creator sets the question and the options
 - Drag-to-rank ballot
 - Peer-to-peer ballot sharing through WebRTC data channels
 - Single transferable vote elimination and transfer rounds
 - Host-only vote counting with automatic result reveal
 - Transparent round-by-round results
 - Responsive light and dark themes
+
+## Wire protocol (v2)
+
+Peers exchange JSON messages over PeerJS data connections opened with
+`{ reliable: true, serialization: "json" }` (native clients such as the
+ArgumentFixer iOS app speak the same protocol):
+
+- `{ "type": "room-info", "topic": string, "candidates": [{ "id", "name", "detail", "icon", "color" }] }`
+  — sent by the host when the vote is defined; only the host is trusted for it.
+- `{ "type": "sync", "room": RoomInfo | null, "ballots": [Ballot], "peerIds": [string] }`
+  — sent by both sides when a connection opens; merges ballots, introduces
+  peers for the mesh, and carries the room definition for late joiners.
+- `{ "type": "ballot", "peerId": string, "ranking": [candidateId] }`
+  — one per voter, deduplicated by `peerId`, re-broadcast to the mesh.
+- `{ "type": "count-results" }` — host tells peers to reveal the local count.
+
+Guests joining before the host defines the vote see a waiting placeholder
+until `room-info` arrives.
 
 ## Run locally
 
@@ -35,3 +54,24 @@ over encrypted WebRTC data channels and are not stored by this app.
 This is still a prototype. For high-stakes elections, use an authenticated
 signaling service, a dedicated TURN service, durable encrypted ballot storage,
 and independent security review.
+
+## Apple App Clip / Universal Links
+
+`.well-known/apple-app-site-association` associates this tool with the
+ArgumentFixer iOS app so invite links can open the app or its App Clip.
+Two deployment caveats:
+
+1. The file must be served from the **domain root**
+   (`https://evgeniyraev.github.io/.well-known/apple-app-site-association`).
+   For GitHub *project* pages that means copying it into the
+   `evgeniyraev/evgeniyraev.github.io` user-site repository — the copy in this
+   repo is the source of truth, not the deployed location.
+2. GitHub Pages serves extensionless files as `application/octet-stream`;
+   Apple's CDN expects `application/json`. If App Clip cards never appear,
+   host the site on Cloudflare Pages or Netlify where the content type can be
+   controlled.
+
+The file carries team id `4F5J749858` and bundle id
+`com.zerogravityroom.argumentfixer` — keep it in sync with the app project's
+`Config.xcconfig`. Uncomment the `apple-itunes-app` meta tag in `index.html`
+once the app is on the App Store.

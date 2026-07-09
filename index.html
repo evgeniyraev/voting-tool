@@ -14,7 +14,12 @@
       href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260613-1" />
+    <link rel="stylesheet" href="styles.css?v=20260709-1" />
+    <link rel="manifest" href="manifest.json" />
+    <!-- Enable once the app ships on the App Store: fill in the App Store id.
+         This makes invite links open the ArgumentFixer App Clip on iPhones.
+    <meta name="apple-itunes-app" content="app-id=APP_STORE_ID, app-clip-bundle-id=com.zerogravityroom.argumentfixer.Clip, app-clip-display=card" />
+    -->
   </head>
   <body>
     <div class="grain"></div>
@@ -46,7 +51,7 @@
           <div class="room-card-top">
             <div>
               <span class="label">Live room</span>
-              <strong id="roomName">Friday team lunch</strong>
+              <strong id="roomName">Opening room…</strong>
             </div>
             <span class="live-dot" id="connectionStatus">Connecting</span>
           </div>
@@ -87,6 +92,29 @@
         </button>
       </nav>
 
+      <section class="view" id="createView">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Host setup</p>
+            <h2>What is the group deciding?</h2>
+          </div>
+          <p>Only you see this step. Give the vote a question and at least <strong>two options</strong> — everyone will rank them.</p>
+        </div>
+        <div class="create-card">
+          <label class="field">
+            <span>The question</span>
+            <input id="createTopic" type="text" maxlength="80" placeholder="e.g. Where should we eat on Friday?" />
+          </label>
+          <span class="field-label">The options</span>
+          <div id="optionRows"></div>
+          <button class="secondary-button add-option" id="addOption" type="button">+ Add another option</button>
+          <button class="primary-button" id="startRoom" type="button">
+            <span>Open the room</span>
+            <span class="arrow">→</span>
+          </button>
+        </div>
+      </section>
+
       <section class="view active" id="ballotView">
         <div class="section-heading">
           <div>
@@ -100,6 +128,10 @@
           <div class="ranking-card">
             <div class="ranking-labels">
               <span>Most preferred</span>
+            </div>
+            <div class="ballot-placeholder" id="ballotPlaceholder" hidden>
+              <span>⏳</span>
+              <p>Waiting for the host to define the vote…<br /><small>The options will appear here the moment they do.</small></p>
             </div>
             <ol class="candidate-list" id="candidateList"></ol>
             <div class="ranking-labels ranking-labels-bottom">
@@ -182,6 +214,6 @@
     <div class="toast" id="toast" role="status"></div>
     <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/qrcodejs@1.0.0/qrcode.min.js"></script>
-    <script src="app.js?v=20260613-1"></script>
+    <script src="app.js?v=20260709-1"></script>
   </body>
 </html>

@@ -1,10 +1,13 @@
-const candidates = [
-  { id: "greenhouse", name: "Greenhouse Café", detail: "Seasonal plates · 12 min walk", icon: "🌿", color: "#d9edc5" },
-  { id: "little-italy", name: "Little Italy", detail: "Pasta & pizza · 8 min walk", icon: "🍅", color: "#f4d4c2" },
-  { id: "noodle-club", name: "Noodle Club", detail: "Asian comfort food · 15 min walk", icon: "🍜", color: "#f3dfb4" },
-  { id: "harbor", name: "The Harbor Room", detail: "Seafood & grill · 10 min walk", icon: "⚓", color: "#cadde9" },
-  { id: "picnic", name: "Park Picnic", detail: "Bring-your-own · 5 min walk", icon: "☀️", color: "#eee4a9" },
+const SAMPLE_TOPIC = "Friday team lunch";
+const SAMPLE_OPTIONS = [
+  { name: "Greenhouse Café", detail: "Seasonal plates · 12 min walk" },
+  { name: "Little Italy", detail: "Pasta & pizza · 8 min walk" },
+  { name: "Noodle Club", detail: "Asian comfort food · 15 min walk" },
+  { name: "The Harbor Room", detail: "Seafood & grill · 10 min walk" },
+  { name: "Park Picnic", detail: "Bring-your-own · 5 min walk" },
 ];
+const OPTION_ICONS = ["🌿", "🍅", "🍜", "⚓", "☀️", "🎯", "🎲", "🌸", "🔥", "🍀", "🥑", "🎧"];
+const OPTION_COLORS = ["#d9edc5", "#f4d4c2", "#f3dfb4", "#cadde9", "#eee4a9", "#e3d1ec", "#cfe8dd", "#f2cdd5"];
 
 const state = {
   ballots: [],
@@ -15,16 +18,29 @@ const state = {
   hostId: null,
   roomCode: null,
   isHost: false,
+  /** { topic, candidates: [{ id, name, detail, icon, color }] } — null until the host defines the vote. */
+  room: null,
 };
 
 const candidateList = document.querySelector("#candidateList");
+const ballotPlaceholder = document.querySelector("#ballotPlaceholder");
+const submitVoteButton = document.querySelector("#submitVote");
 const toast = document.querySelector("#toast");
 const connectionStatus = document.querySelector("#connectionStatus");
 const copyRoomButton = document.querySelector("#copyRoom");
 const showQrButton = document.querySelector("#showQr");
 const qrDialog = document.querySelector("#qrDialog");
 const qrCode = document.querySelector("#qrCode");
+const optionRows = document.querySelector("#optionRows");
 const HOST_STORAGE_KEY = "common-ground-host-id";
+
+function candidates() {
+  return state.room ? state.room.candidates : [];
+}
+
+function findCandidate(id) {
+  return candidates().find((candidate) => candidate.id === id);
+}
 
 function randomRoomCode() {
   const words = ["LIME", "MINT", "SAGE", "FERN", "PINE", "MOSS"];
@@ -48,19 +64,31 @@ function writeRoomLink() {
   history.replaceState(null, "", `${location.pathname}${location.search}#${params}`);
 }
 
+function applyRoom(room) {
+  if (state.room || !room || !Array.isArray(room.candidates) || room.candidates.length < 2) return;
+  state.room = { topic: room.topic || "Group decision", candidates: room.candidates };
+  document.querySelector("#roomName").textContent = state.room.topic;
+  renderCandidates();
+}
+
 function renderCandidates() {
+  const items = candidates();
+  ballotPlaceholder.hidden = items.length > 0;
+  submitVoteButton.disabled = items.length === 0;
   candidateList.innerHTML = "";
-  candidates.forEach((candidate) => {
+  items.forEach((candidate) => {
     const item = document.createElement("li");
     item.className = "candidate";
     item.draggable = matchMedia("(hover: hover) and (pointer: fine)").matches;
     item.dataset.id = candidate.id;
     item.innerHTML = `
       <span class="candidate-art" style="--candidate: ${candidate.color}">${candidate.icon}</span>
-      <div><strong>${candidate.name}</strong><small>${candidate.detail}</small></div>
+      <div><strong></strong><small></small></div>
       <span class="support">Rank this choice</span>
       <span class="handle">⠿</span>
     `;
+    item.querySelector("strong").textContent = candidate.name;
+    item.querySelector("small").textContent = candidate.detail || "";
     const handle = item.querySelector(".handle");
     item.addEventListener("dragstart", () => {
       state.dragging = item;
@@ -153,6 +181,7 @@ function showToast(message) {
 }
 
 function switchView(view) {
+  document.body.classList.toggle("creating", view === "create");
   document.querySelectorAll(".view").forEach((item) => item.classList.remove("active"));
   document.querySelector(`#${view}View`).classList.add("active");
   document.querySelectorAll(".progress-step").forEach((step) => {
@@ -170,7 +199,10 @@ function receivePeerMessage(message, senderId = null) {
     state.ballots.push({ peerId: message.peerId, ranking: message.ranking });
     updateWaiting();
     showToast("An anonymous peer submitted a ballot");
+  } else if (message.type === "room-info" && senderId === state.hostId && !state.isHost) {
+    applyRoom({ topic: message.topic, candidates: message.candidates });
   } else if (message.type === "sync") {
+    if (message.room && !state.isHost) applyRoom(message.room);
     message.ballots.forEach((ballot) => {
       if (!state.ballots.some((existing) => existing.peerId === ballot.peerId)) state.ballots.push(ballot);
     });
@@ -202,6 +234,7 @@ function registerConnection(connection) {
   connection.on("open", () => {
     connection.send({
       type: "sync",
+      room: state.room,
       ballots: state.ballots,
       peerIds: [state.hostId, ...state.peers.keys()].filter(Boolean),
     });
@@ -223,12 +256,10 @@ function registerConnection(connection) {
 
 function connectToPeer(peerId) {
   if (!peerId || peerId === state.peerId || state.peers.has(peerId)) return;
-  registerConnection(state.peer.connect(peerId, { reliable: true }));
+  registerConnection(state.peer.connect(peerId, { reliable: true, serialization: "json" }));
 }
 
 function setupPeerChannel() {
-  readRoomLink();
-  configureRoleUI();
   if (!window.Peer) {
     connectionStatus.textContent = "Offline";
     showToast("Could not load the room service");
@@ -279,6 +310,7 @@ function configureRoleUI() {
   if (!state.isHost) {
     document.querySelector("#waitingMessage").textContent =
       "Your anonymous ballot is locked in. The inviter will reveal the result when voting is complete.";
+    document.querySelector("#roomName").textContent = "Waiting for the host…";
   }
 }
 
@@ -288,8 +320,70 @@ function startNewRoom() {
   location.reload();
 }
 
+// MARK: Host vote creation
+
+function slugify(name, taken) {
+  let base = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "option";
+  let id = base;
+  for (let n = 2; taken.has(id); n += 1) id = `${base}-${n}`;
+  taken.add(id);
+  return id;
+}
+
+function addOptionRow(name = "", detail = "") {
+  const row = document.createElement("div");
+  row.className = "option-row";
+  row.innerHTML = `
+    <span class="option-icon"></span>
+    <input class="option-name" type="text" maxlength="60" placeholder="Option name" />
+    <input class="option-detail" type="text" maxlength="80" placeholder="Detail (optional)" />
+    <button class="option-remove" type="button" aria-label="Remove option">×</button>
+  `;
+  row.querySelector(".option-name").value = name;
+  row.querySelector(".option-detail").value = detail;
+  row.querySelector(".option-remove").addEventListener("click", () => {
+    row.remove();
+    refreshOptionIcons();
+  });
+  optionRows.appendChild(row);
+  refreshOptionIcons();
+  return row;
+}
+
+function refreshOptionIcons() {
+  [...optionRows.querySelectorAll(".option-icon")].forEach((icon, index) => {
+    icon.textContent = OPTION_ICONS[index % OPTION_ICONS.length];
+    icon.style.setProperty("--candidate", OPTION_COLORS[index % OPTION_COLORS.length]);
+  });
+}
+
+function renderCreateView() {
+  document.querySelector("#createTopic").value = SAMPLE_TOPIC;
+  SAMPLE_OPTIONS.forEach((option) => addOptionRow(option.name, option.detail));
+}
+
+function startRoom() {
+  const topic = document.querySelector("#createTopic").value.trim() || "Group decision";
+  const taken = new Set();
+  const roomCandidates = [...optionRows.querySelectorAll(".option-row")]
+    .map((row, index) => ({
+      name: row.querySelector(".option-name").value.trim(),
+      detail: row.querySelector(".option-detail").value.trim(),
+      icon: OPTION_ICONS[index % OPTION_ICONS.length],
+      color: OPTION_COLORS[index % OPTION_COLORS.length],
+    }))
+    .filter((option) => option.name)
+    .map((option) => ({ id: slugify(option.name, taken), ...option }));
+  if (roomCandidates.length < 2) return showToast("Add at least two options to vote on");
+
+  applyRoom({ topic, candidates: roomCandidates });
+  sendToAll({ type: "room-info", topic: state.room.topic, candidates: state.room.candidates });
+  switchView("ballot");
+}
+
 function submitBallot() {
   if (!state.peerId) return showToast("Wait for the room to finish connecting");
+  if (!state.room) return showToast("The host hasn't started the vote yet");
   if (state.ballots.some((ballot) => ballot.peerId === state.peerId)) return;
   const ranking = currentBallot();
   state.ballots.push({ peerId: state.peerId, ranking });
@@ -305,7 +399,7 @@ function updateWaiting() {
 }
 
 function countSTV(ballots) {
-  const active = new Set(candidates.map((candidate) => candidate.id));
+  const active = new Set(candidates().map((candidate) => candidate.id));
   const rounds = [];
   const majority = Math.floor(ballots.length / 2) + 1;
 
@@ -334,9 +428,10 @@ function countSTV(ballots) {
 
 function renderResults(announce = false) {
   if (!state.ballots.length) return showToast("No ballots have been submitted yet");
+  if (!state.room) return showToast("The vote hasn't been defined yet");
   if (announce && !state.isHost) return showToast("Only the inviter can count votes");
   const result = countSTV(state.ballots);
-  const winner = candidates.find((candidate) => candidate.id === result.winner);
+  const winner = findCandidate(result.winner);
   document.querySelector("#winnerName").textContent = winner.name;
   document.querySelector("#winnerVotes").textContent = result.votes;
   document.querySelector("#winnerPercent").textContent = `${Math.round(result.votes / state.ballots.length * 100)}%`;
@@ -351,7 +446,7 @@ function renderResults(announce = false) {
     const rows = Object.entries(round.counts)
       .sort((a, b) => b[1] - a[1])
       .map(([id, votes]) => {
-        const candidate = candidates.find((item) => item.id === id);
+        const candidate = findCandidate(id);
         return `
           <div class="bar-row ${round.eliminated === id ? "eliminated" : ""}">
             <div><p>${candidate.icon} ${candidate.name}</p><div class="bar"><i style="--bar-color: ${candidate.color}; width: ${votes / state.ballots.length * 100}%"></i></div></div>
@@ -367,8 +462,10 @@ function renderResults(announce = false) {
   if (announce) sendToAll({ type: "count-results" });
 }
 
-document.querySelector("#submitVote").addEventListener("click", submitBallot);
+submitVoteButton.addEventListener("click", submitBallot);
 document.querySelector("#countNow").addEventListener("click", () => renderResults(true));
+document.querySelector("#addOption").addEventListener("click", () => addOptionRow().querySelector(".option-name").focus());
+document.querySelector("#startRoom").addEventListener("click", startRoom);
 copyRoomButton.addEventListener("click", async () => {
   if (copyRoomButton.textContent === "Start new room") return startNewRoom();
   if (!state.hostId) return showToast("Room is still connecting");
@@ -404,5 +501,11 @@ document.querySelectorAll(".progress-step").forEach((step) => step.addEventListe
   else if (step.dataset.view !== "results") switchView(step.dataset.view);
 }));
 
+readRoomLink();
+configureRoleUI();
 renderCandidates();
+if (state.isHost) {
+  renderCreateView();
+  switchView("create");
+}
 setupPeerChannel();

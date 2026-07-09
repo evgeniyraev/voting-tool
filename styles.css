@@ -224,6 +224,34 @@ h1 em::after { content: ""; position: absolute; left: 0; bottom: 4px; width: 100
 .qr-code { width: 224px; height: 224px; display: grid; place-items: center; padding: 12px; margin: auto; border: 1px solid var(--line); border-radius: 14px; background: white; }
 .qr-code img, .qr-code canvas { max-width: 100%; height: auto !important; }
 .qr-close { position: absolute; top: 13px; right: 13px; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--ink); font-size: 22px; line-height: 1; cursor: pointer; }
+body.creating .progress-nav { display: none; }
+.create-card {
+  background: var(--card); border: 1px solid rgba(207,204,195,.8); border-radius: 20px; box-shadow: var(--shadow);
+  padding: 28px; max-width: 720px;
+}
+.field { display: block; margin-bottom: 24px; }
+.field > span, .field-label { display: block; color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .13em; font-weight: 800; margin-bottom: 9px; }
+.create-card input {
+  width: 100%; border: 1px solid var(--line); border-radius: 11px; background: #fffefa; color: var(--ink);
+  padding: 13px 14px; font: inherit; font-size: 14px;
+}
+.create-card input:focus { outline: 2px solid var(--green); outline-offset: -1px; }
+.field input { font-family: Manrope, sans-serif; font-weight: 700; font-size: 17px; }
+.option-row { display: grid; grid-template-columns: 44px 1.1fr 1fr 32px; gap: 9px; align-items: center; margin-bottom: 9px; }
+.option-icon { width: 44px; height: 44px; border-radius: 11px; display: grid; place-items: center; font-size: 22px; background: var(--candidate, #e6e5df); }
+.option-remove { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 50%; background: transparent; font-size: 17px; line-height: 1; cursor: pointer; color: var(--muted); }
+.option-remove:hover { color: var(--orange); border-color: var(--orange); }
+.add-option { width: 100%; margin: 6px 0 18px; min-height: 46px; }
+.ballot-placeholder { display: flex; align-items: center; gap: 16px; padding: 34px 22px; border: 2px dashed var(--line); border-radius: 13px; }
+.ballot-placeholder span { font-size: 30px; }
+.ballot-placeholder p { margin: 0; font-size: 13px; line-height: 1.55; }
+.ballot-placeholder small { color: var(--muted); font-size: 11px; }
+body.dark .create-card input { background: #24352d; border-color: #3b4b43; }
+@media (max-width: 800px) {
+  .option-row { grid-template-columns: 36px 1fr 28px; }
+  .option-row .option-detail { grid-column: 2 / -1; }
+  .option-icon { width: 36px; height: 36px; font-size: 18px; }
+}
 body.dark { --ink: #edf3ed; --muted: #a7b1aa; --paper: #14221c; --card: #1d2c25; --line: #36453e; --green: #7cdbad; --lime: #d6f06d; }
 body.dark .room-card, body.dark .primary-button, body.dark .candidate::before { background: #28624b; }
 body.dark .candidate { background: #24352d; border-color: #3b4b43; }

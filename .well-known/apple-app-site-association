@@ -1,0 +1,17 @@
+{
+  "appclips": {
+    "apps": ["4F5J749858.com.zerogravityroom.argumentfixer.Clip"]
+  },
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["4F5J749858.com.zerogravityroom.argumentfixer"],
+        "components": [
+          { "/": "/voting-tool/*" },
+          { "/": "/voting-tool/" }
+        ]
+      }
+    ]
+  }
+}
