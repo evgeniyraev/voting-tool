@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260709-1" />
+    <link rel="stylesheet" href="styles.css?v=20260710-1" />
     <link rel="manifest" href="manifest.json" />
     <!-- Enable once the app ships on the App Store: fill in the App Store id.
          This makes invite links open the ArgumentFixer App Clip on iPhones.
@@ -105,13 +105,69 @@
             <span>The question</span>
             <input id="createTopic" type="text" maxlength="80" placeholder="e.g. Where should we eat on Friday?" />
           </label>
-          <span class="field-label">The options</span>
-          <div id="optionRows"></div>
-          <button class="secondary-button add-option" id="addOption" type="button">+ Add another option</button>
+          <span class="field-label">How should options be picked?</span>
+          <div class="mode-toggle" id="modeToggle">
+            <button class="mode-option active" type="button" data-mode="classic">
+              <strong>You define the ballot</strong>
+              <small>Write the options now; voters rank them straight away.</small>
+            </button>
+            <button class="mode-option" type="button" data-mode="staged">
+              <strong>Collect ideas first</strong>
+              <small>Everyone suggests options, marks ready, then the vote begins.</small>
+            </button>
+          </div>
+          <div id="classicFields">
+            <span class="field-label">The options</span>
+            <div id="optionRows"></div>
+            <button class="secondary-button add-option" id="addOption" type="button">+ Add another option</button>
+          </div>
           <button class="primary-button" id="startRoom" type="button">
             <span>Open the room</span>
             <span class="arrow">→</span>
           </button>
+        </div>
+      </section>
+
+      <section class="view" id="suggestView">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Stage 1 · Gather ideas</p>
+            <h2 id="suggestTopic">What are the options?</h2>
+          </div>
+          <p>Suggest options for the group — they're anonymous, like the ballots. Mark yourself <strong>ready</strong> when you're done; voting starts when everyone is.</p>
+        </div>
+        <div class="ballot-layout">
+          <div class="ranking-card suggest-card">
+            <div class="suggest-input-row">
+              <input id="suggestName" type="text" maxlength="60" placeholder="Suggest an option…" />
+              <input id="suggestDetail" type="text" maxlength="80" placeholder="Detail (optional)" />
+              <button class="copy-button" id="addSuggestion" type="button">Add</button>
+            </div>
+            <ol class="candidate-list" id="suggestionList"></ol>
+            <div class="ballot-placeholder suggest-empty" id="suggestEmpty"><span>💡</span><p>Nothing yet — add the first idea!</p></div>
+            <button class="primary-button" id="readyToggle" type="button">
+              <span>I'm ready to vote</span>
+              <span class="arrow">✓</span>
+            </button>
+            <p class="lock-note" id="readyMeter">Waiting for suggestions…</p>
+            <button class="secondary-button" id="startVoteNow" type="button" hidden>Start the vote now</button>
+          </div>
+          <aside class="how-card">
+            <p class="eyebrow">How this works</p>
+            <h3>Ideas first, then rank.</h3>
+            <div class="mini-step">
+              <span>1</span>
+              <div><strong>Everyone suggests</strong><p>Add as many options as you like — nobody sees who wrote what.</p></div>
+            </div>
+            <div class="mini-step">
+              <span>2</span>
+              <div><strong>Mark ready</strong><p>When every participant is ready, the ballot opens automatically.</p></div>
+            </div>
+            <div class="mini-step">
+              <span>3</span>
+              <div><strong>Rank & reveal</strong><p>Results appear once everyone has voted.</p></div>
+            </div>
+          </aside>
         </div>
       </section>
 
@@ -214,6 +270,6 @@
     <div class="toast" id="toast" role="status"></div>
     <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/qrcodejs@1.0.0/qrcode.min.js"></script>
-    <script src="app.js?v=20260709-1"></script>
+    <script src="app.js?v=20260710-1"></script>
   </body>
 </html>

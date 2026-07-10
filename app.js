@@ -20,7 +20,17 @@ const state = {
   isHost: false,
   /** { topic, candidates: [{ id, name, detail, icon, color }] } — null until the host defines the vote. */
   room: null,
+  /** Staged rooms: { mode: "staged", topic, stage: "suggest"|"vote"|"results" } — null in classic rooms. */
+  config: null,
+  suggestions: [],
+  ready: new Set(),
+  /** Non-host peers that have acted (suggested / readied / voted). */
+  actors: new Set(),
+  revealed: false,
 };
+
+/** Messages re-broadcast into the mesh when they carried new information. */
+const RELAY_TYPES = new Set(["ballot", "suggestion", "ready"]);
 
 const candidateList = document.querySelector("#candidateList");
 const ballotPlaceholder = document.querySelector("#ballotPlaceholder");
@@ -32,7 +42,13 @@ const showQrButton = document.querySelector("#showQr");
 const qrDialog = document.querySelector("#qrDialog");
 const qrCode = document.querySelector("#qrCode");
 const optionRows = document.querySelector("#optionRows");
+const suggestionList = document.querySelector("#suggestionList");
+const suggestEmpty = document.querySelector("#suggestEmpty");
+const readyToggle = document.querySelector("#readyToggle");
+const readyMeter = document.querySelector("#readyMeter");
+const startVoteNow = document.querySelector("#startVoteNow");
 const HOST_STORAGE_KEY = "common-ground-host-id";
+let selectedMode = "classic";
 
 function candidates() {
   return state.room ? state.room.candidates : [];
@@ -69,6 +85,122 @@ function applyRoom(room) {
   state.room = { topic: room.topic || "Group decision", candidates: room.candidates };
   document.querySelector("#roomName").textContent = state.room.topic;
   renderCandidates();
+}
+
+function applyConfig(config) {
+  if (state.config || !config || config.mode !== "staged") return;
+  state.config = { mode: "staged", topic: config.topic || "Group decision", stage: config.stage || "suggest" };
+  document.querySelector("#roomName").textContent = state.config.topic;
+  document.querySelector("#suggestTopic").textContent = state.config.topic;
+  if (state.config.stage === "suggest") switchView("suggest");
+  renderSuggestions();
+  updateReadyMeter();
+}
+
+function enterVotingStage() {
+  if (!state.config || state.config.stage === "vote") return;
+  state.config.stage = "vote";
+  if (state.room && !state.ballots.some((ballot) => ballot.peerId === state.peerId)) {
+    switchView("ballot");
+    showToast("Everyone's ready — rank the options!");
+  }
+}
+
+// MARK: Staged rooms — roster & readiness
+
+function rosterIds() {
+  const ids = new Set(state.actors);
+  state.peers.forEach((connection, peerId) => {
+    if (connection.open) ids.add(peerId);
+  });
+  if (!state.isHost && state.peerId) ids.add(state.peerId);
+  ids.delete(state.hostId);
+  return ids;
+}
+
+function allReady() {
+  const roster = rosterIds();
+  return roster.size > 0 && [...roster].every((peerId) => state.ready.has(peerId));
+}
+
+function uniqueSuggestionCandidates() {
+  const seen = new Set();
+  const unique = state.suggestions.filter((suggestion) => {
+    const key = suggestion.name.trim().toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const taken = new Set();
+  return unique.map((suggestion, index) => ({
+    id: slugify(suggestion.name, taken),
+    name: suggestion.name.trim(),
+    detail: (suggestion.detail || "").trim(),
+    icon: OPTION_ICONS[index % OPTION_ICONS.length],
+    color: OPTION_COLORS[index % OPTION_COLORS.length],
+  }));
+}
+
+function renderSuggestions() {
+  if (!suggestionList) return;
+  suggestEmpty.hidden = state.suggestions.length > 0;
+  suggestionList.innerHTML = "";
+  state.suggestions.forEach((suggestion, index) => {
+    const item = document.createElement("li");
+    item.className = "candidate suggestion";
+    const art = document.createElement("span");
+    art.className = "candidate-art";
+    art.style.setProperty("--candidate", OPTION_COLORS[index % OPTION_COLORS.length]);
+    art.textContent = OPTION_ICONS[index % OPTION_ICONS.length];
+    const text = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = suggestion.name;
+    const detail = document.createElement("small");
+    detail.textContent = suggestion.detail || "";
+    text.append(title, detail);
+    item.append(art, text);
+    suggestionList.appendChild(item);
+  });
+}
+
+function updateReadyMeter() {
+  if (!readyMeter) return;
+  const roster = rosterIds();
+  const readyCount = [...roster].filter((peerId) => state.ready.has(peerId)).length;
+  readyMeter.textContent = roster.size
+    ? `${readyCount} of ${roster.size} ready · voting starts when everyone is`
+    : "Share the invite — voting starts when everyone is ready";
+  const mine = state.ready.has(state.peerId);
+  readyToggle.querySelector("span").textContent = mine ? "Ready — waiting for the others" : "I'm ready to vote";
+  readyToggle.classList.toggle("is-ready", mine);
+  if (state.isHost) {
+    startVoteNow.disabled = uniqueSuggestionCandidates().length < 2;
+  }
+}
+
+function maybeAutoStartVote() {
+  if (!state.isHost || !state.config || state.config.stage !== "suggest") return;
+  if (allReady() && uniqueSuggestionCandidates().length >= 2) startVote();
+}
+
+function startVote() {
+  if (!state.isHost || !state.config || state.config.stage !== "suggest") return;
+  const candidates = uniqueSuggestionCandidates();
+  if (candidates.length < 2) return showToast("Need at least two distinct suggestions");
+  applyRoom({ topic: state.config.topic, candidates });
+  state.config.stage = "vote";
+  sendToAll({ type: "room-info", topic: state.room.topic, candidates: state.room.candidates });
+  sendToAll({ type: "stage", stage: "vote" });
+  switchView("ballot");
+}
+
+function maybeAutoReveal() {
+  if (!state.isHost || !state.config || state.config.stage !== "vote" || state.revealed) return;
+  const roster = rosterIds();
+  const voted = new Set(state.ballots.map((ballot) => ballot.peerId));
+  if (roster.size > 0 && [...roster].every((peerId) => voted.has(peerId)) && voted.has(state.peerId)) {
+    renderResults(true);
+  }
 }
 
 function renderCandidates() {
@@ -181,7 +313,7 @@ function showToast(message) {
 }
 
 function switchView(view) {
-  document.body.classList.toggle("creating", view === "create");
+  document.body.classList.toggle("creating", view === "create" || view === "suggest");
   document.querySelectorAll(".view").forEach((item) => item.classList.remove("active"));
   document.querySelector(`#${view}View`).classList.add("active");
   document.querySelectorAll(".progress-step").forEach((step) => {
@@ -194,25 +326,77 @@ function currentBallot() {
   return [...candidateList.querySelectorAll(".candidate")].map((item) => item.dataset.id);
 }
 
+/** Applies a message; returns true when it carried new information (and, for
+ *  RELAY_TYPES, should be re-broadcast into the mesh). */
 function receivePeerMessage(message, senderId = null) {
-  if (message.type === "ballot" && !state.ballots.some((ballot) => ballot.peerId === message.peerId)) {
+  if (message.type === "ballot") {
+    if (state.ballots.some((ballot) => ballot.peerId === message.peerId)) return false;
     state.ballots.push({ peerId: message.peerId, ranking: message.ranking });
+    state.actors.add(message.peerId);
     updateWaiting();
     showToast("An anonymous peer submitted a ballot");
-  } else if (message.type === "room-info" && senderId === state.hostId && !state.isHost) {
+    maybeAutoReveal();
+    return true;
+  }
+  if (message.type === "room-info" && senderId === state.hostId && !state.isHost) {
     applyRoom({ topic: message.topic, candidates: message.candidates });
-  } else if (message.type === "sync") {
+    return false;
+  }
+  if (message.type === "room-config" && senderId === state.hostId && !state.isHost) {
+    applyConfig(message);
+    return false;
+  }
+  if (message.type === "suggestion") {
+    if (state.room || state.suggestions.some((existing) => existing.id === message.id)) return false;
+    state.suggestions.push({ id: message.id, peerId: message.peerId, name: message.name, detail: message.detail || "" });
+    state.actors.add(message.peerId);
+    renderSuggestions();
+    updateReadyMeter();
+    maybeAutoStartVote();
+    return true;
+  }
+  if (message.type === "ready") {
+    const has = state.ready.has(message.peerId);
+    if (message.ready === has) return false;
+    if (message.ready) state.ready.add(message.peerId);
+    else state.ready.delete(message.peerId);
+    state.actors.add(message.peerId);
+    updateReadyMeter();
+    maybeAutoStartVote();
+    return true;
+  }
+  if (message.type === "stage" && senderId === state.hostId && !state.isHost) {
+    if (message.stage === "vote") enterVotingStage();
+    return false;
+  }
+  if (message.type === "sync") {
     if (message.room && !state.isHost) applyRoom(message.room);
+    if (message.config && !state.isHost) applyConfig(message.config);
     message.ballots.forEach((ballot) => {
-      if (!state.ballots.some((existing) => existing.peerId === ballot.peerId)) state.ballots.push(ballot);
+      if (!state.ballots.some((existing) => existing.peerId === ballot.peerId)) {
+        state.ballots.push(ballot);
+        state.actors.add(ballot.peerId);
+      }
     });
+    (message.suggestions || []).forEach((suggestion) => {
+      if (!state.suggestions.some((existing) => existing.id === suggestion.id)) {
+        state.suggestions.push(suggestion);
+        state.actors.add(suggestion.peerId);
+      }
+    });
+    (message.readyPeerIds || []).forEach((peerId) => state.ready.add(peerId));
     message.peerIds.forEach((peerId) => {
       if (peerId !== state.peerId && !state.peers.has(peerId)) connectToPeer(peerId);
     });
     updateWaiting();
-  } else if (message.type === "count-results" && senderId === state.hostId) {
+    renderSuggestions();
+    updateReadyMeter();
+    return false;
+  }
+  if (message.type === "count-results" && senderId === state.hostId) {
     renderResults(false);
   }
+  return false;
 }
 
 function sendToAll(message, exceptPeerId = null) {
@@ -235,22 +419,32 @@ function registerConnection(connection) {
     connection.send({
       type: "sync",
       room: state.room,
+      config: state.config,
+      suggestions: state.suggestions,
+      readyPeerIds: [...state.ready],
       ballots: state.ballots,
       peerIds: [state.hostId, ...state.peers.keys()].filter(Boolean),
     });
     updatePeerCount();
+    updateReadyMeter();
   });
   connection.on("data", (message) => {
-    receivePeerMessage(message, connection.peer);
-    if (message.type === "ballot") sendToAll(message, connection.peer);
+    const carriedNews = receivePeerMessage(message, connection.peer);
+    if (carriedNews && RELAY_TYPES.has(message.type)) sendToAll(message, connection.peer);
   });
   connection.on("close", () => {
     state.peers.delete(connection.peer);
     updatePeerCount();
+    updateReadyMeter();
+    maybeAutoStartVote();
+    maybeAutoReveal();
   });
   connection.on("error", () => {
     state.peers.delete(connection.peer);
     updatePeerCount();
+    updateReadyMeter();
+    maybeAutoStartVote();
+    maybeAutoReveal();
   });
 }
 
@@ -362,8 +556,49 @@ function renderCreateView() {
   SAMPLE_OPTIONS.forEach((option) => addOptionRow(option.name, option.detail));
 }
 
+function startStagedRoom(topic) {
+  state.config = { mode: "staged", topic, stage: "suggest" };
+  document.querySelector("#roomName").textContent = topic;
+  document.querySelector("#suggestTopic").textContent = topic;
+  readyToggle.hidden = true; // the host starts the vote instead of readying
+  startVoteNow.hidden = false;
+  sendToAll({ type: "room-config", mode: "staged", topic, stage: "suggest" });
+  renderSuggestions();
+  updateReadyMeter();
+  switchView("suggest");
+}
+
+function submitSuggestion() {
+  const nameInput = document.querySelector("#suggestName");
+  const detailInput = document.querySelector("#suggestDetail");
+  const name = nameInput.value.trim();
+  if (!name || !state.config || state.config.stage !== "suggest") return;
+  const peerId = state.peerId || state.hostId;
+  const suggestion = { id: `sug-${crypto.randomUUID()}`, peerId, name, detail: detailInput.value.trim() };
+  state.suggestions.push(suggestion);
+  state.actors.add(peerId);
+  sendToAll({ type: "suggestion", ...suggestion });
+  nameInput.value = "";
+  detailInput.value = "";
+  nameInput.focus();
+  renderSuggestions();
+  updateReadyMeter();
+  maybeAutoStartVote();
+}
+
+function toggleReady() {
+  if (!state.peerId) return showToast("Wait for the room to finish connecting");
+  const next = !state.ready.has(state.peerId);
+  if (next) state.ready.add(state.peerId);
+  else state.ready.delete(state.peerId);
+  state.actors.add(state.peerId);
+  sendToAll({ type: "ready", peerId: state.peerId, ready: next });
+  updateReadyMeter();
+}
+
 function startRoom() {
   const topic = document.querySelector("#createTopic").value.trim() || "Group decision";
+  if (selectedMode === "staged") return startStagedRoom(topic);
   const taken = new Set();
   const roomCandidates = [...optionRows.querySelectorAll(".option-row")]
     .map((row, index) => ({
@@ -458,6 +693,7 @@ function renderResults(announce = false) {
       ${rows}`;
     roundsList.appendChild(card);
   });
+  state.revealed = true;
   switchView("results");
   if (announce) sendToAll({ type: "count-results" });
 }
@@ -493,9 +729,28 @@ qrDialog.addEventListener("click", (event) => {
 document.querySelector("#themeButton").addEventListener("click", () => document.body.classList.toggle("dark"));
 document.querySelector("#restartVote").addEventListener("click", () => {
   state.ballots = [];
+  state.revealed = false;
   renderCandidates();
   switchView("ballot");
 });
+document.querySelector("#addSuggestion").addEventListener("click", submitSuggestion);
+document.querySelector("#suggestName").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") submitSuggestion();
+});
+document.querySelector("#suggestDetail").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") submitSuggestion();
+});
+readyToggle.addEventListener("click", toggleReady);
+startVoteNow.addEventListener("click", startVote);
+document.querySelectorAll("#modeToggle .mode-option").forEach((button) => button.addEventListener("click", () => {
+  selectedMode = button.dataset.mode;
+  document.querySelectorAll("#modeToggle .mode-option").forEach((other) => {
+    other.classList.toggle("active", other === button);
+  });
+  document.querySelector("#classicFields").hidden = selectedMode === "staged";
+  document.querySelector("#startRoom span").textContent =
+    selectedMode === "staged" ? "Open the idea room" : "Open the room";
+}));
 document.querySelectorAll(".progress-step").forEach((step) => step.addEventListener("click", () => {
   if (step.dataset.view === "results" && state.ballots.length && state.isHost) renderResults(true);
   else if (step.dataset.view !== "results") switchView(step.dataset.view);

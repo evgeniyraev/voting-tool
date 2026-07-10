@@ -62,9 +62,9 @@ ArgumentFixer iOS app so invite links can open the app or its App Clip.
 Two deployment caveats:
 
 1. The file must be served from the **domain root**
-   (`https://evgeniyraev.github.io/.well-known/apple-app-site-association`).
+   (`https://zerogravityroom.github.io/.well-known/apple-app-site-association`).
    For GitHub *project* pages that means copying it into the
-   `evgeniyraev/evgeniyraev.github.io` user-site repository — the copy in this
+   `zerogravityroom/zerogravityroom.github.io` user-site repository — the copy in this
    repo is the source of truth, not the deployed location.
 2. GitHub Pages serves extensionless files as `application/octet-stream`;
    Apple's CDN expects `application/json`. If App Clip cards never appear,
