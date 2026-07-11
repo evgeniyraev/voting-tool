@@ -300,3 +300,21 @@ body.dark .candidate .support, body.dark .eyebrow, body.dark .how-card a { color
   .waiting-actions { flex-direction: column; }
   .primary-button.compact { width: 100%; }
 }
+
+.site-footer {
+  max-width: 1200px;
+  margin: auto;
+  padding: 28px 34px 70px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 22px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+.site-footer a { color: var(--green); font-weight: 800; text-decoration: none; }
+body.dark .site-footer a { color: #8ee0b8; }
+@media (max-width: 800px) {
+  .site-footer { padding: 22px 18px 55px; gap: 4px 18px; }
+}

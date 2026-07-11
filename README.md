@@ -75,3 +75,12 @@ The file carries team id `4F5J749858` and bundle id
 `com.zerogravityroom.tinytribunal` — keep it in sync with the app project's
 `Config.xcconfig`. Uncomment the `apple-itunes-app` meta tag in `index.html`
 once the app is on the App Store.
+
+## Learn more about ranked-choice voting
+
+The "how it works" panels (ballot and suggest views) and the page footer link
+out to a short explainer of the counting method — reachable, but out of the
+main flow:
+
+- Single transferable vote — <https://en.wikipedia.org/wiki/Single_transferable_vote>
+- Video explainer — <https://youtu.be/l8XOZJkozfI>
