@@ -89,12 +89,54 @@ function applyRoom(room) {
 
 function applyConfig(config) {
   if (state.config || !config || config.mode !== "staged") return;
-  state.config = { mode: "staged", topic: config.topic || "Group decision", stage: config.stage || "suggest" };
+  state.config = {
+    mode: "staged",
+    topic: config.topic || "Group decision",
+    stage: config.stage || "suggest",
+    generation: config.generation || 1,
+  };
   document.querySelector("#roomName").textContent = state.config.topic;
   document.querySelector("#suggestTopic").textContent = state.config.topic;
   if (state.config.stage === "suggest") switchView("suggest");
   renderSuggestions();
   updateReadyMeter();
+}
+
+function configGeneration() {
+  return state.config ? state.config.generation || 1 : 1;
+}
+
+/** Clears every trace of the current vote — the room itself stays open. */
+function resetVoteState() {
+  state.ballots = [];
+  state.suggestions = [];
+  state.ready = new Set();
+  state.actors = new Set();
+  state.room = null;
+  state.revealed = false;
+}
+
+/** Protocol v4: the host abandoned the current vote and reopened the room at
+ *  the suggest stage with a higher generation. */
+function applyNewVote(config) {
+  if (!config || config.mode !== "staged") return;
+  const incoming = config.generation || 1;
+  if (state.config && incoming <= configGeneration()) return;
+  resetVoteState();
+  state.config = {
+    mode: "staged",
+    topic: config.topic || "Group decision",
+    stage: config.stage || "suggest",
+    generation: incoming,
+  };
+  document.querySelector("#roomName").textContent = state.config.topic;
+  document.querySelector("#suggestTopic").textContent = state.config.topic;
+  renderCandidates();
+  renderSuggestions();
+  updateReadyMeter();
+  updateWaiting();
+  switchView(state.config.stage === "suggest" ? "suggest" : "ballot");
+  showToast("The host started a new vote — suggest your ideas!");
 }
 
 function enterVotingStage() {
@@ -369,22 +411,35 @@ function receivePeerMessage(message, senderId = null) {
     if (message.stage === "vote") enterVotingStage();
     return false;
   }
+  if (message.type === "new-vote" && senderId === state.hostId && !state.isHost) {
+    applyNewVote(message);
+    return false;
+  }
   if (message.type === "sync") {
-    if (message.room && !state.isHost) applyRoom(message.room);
-    if (message.config && !state.isHost) applyConfig(message.config);
-    message.ballots.forEach((ballot) => {
-      if (!state.ballots.some((existing) => existing.peerId === ballot.peerId)) {
-        state.ballots.push(ballot);
-        state.actors.add(ballot.peerId);
-      }
-    });
-    (message.suggestions || []).forEach((suggestion) => {
-      if (!state.suggestions.some((existing) => existing.id === suggestion.id)) {
-        state.suggestions.push(suggestion);
-        state.actors.add(suggestion.peerId);
-      }
-    });
-    (message.readyPeerIds || []).forEach((peerId) => state.ready.add(peerId));
+    // v4: a peer already following a restarted vote — reset before ingesting.
+    const incomingGeneration = message.config ? message.config.generation || 1 : 1;
+    if (!state.isHost && state.config && incomingGeneration > configGeneration()) {
+      applyNewVote(message.config);
+    }
+    // Stale peers that missed a restart must not re-inject the old vote.
+    const staleVote = incomingGeneration < configGeneration();
+    if (!staleVote) {
+      if (message.room && !state.isHost) applyRoom(message.room);
+      if (message.config && !state.isHost) applyConfig(message.config);
+      message.ballots.forEach((ballot) => {
+        if (!state.ballots.some((existing) => existing.peerId === ballot.peerId)) {
+          state.ballots.push(ballot);
+          state.actors.add(ballot.peerId);
+        }
+      });
+      (message.suggestions || []).forEach((suggestion) => {
+        if (!state.suggestions.some((existing) => existing.id === suggestion.id)) {
+          state.suggestions.push(suggestion);
+          state.actors.add(suggestion.peerId);
+        }
+      });
+      (message.readyPeerIds || []).forEach((peerId) => state.ready.add(peerId));
+    }
     message.peerIds.forEach((peerId) => {
       if (peerId !== state.peerId && !state.peers.has(peerId)) connectToPeer(peerId);
     });
@@ -500,6 +555,7 @@ function configureRoleUI() {
   const restartButton = document.querySelector("#restartVote");
   countButton.hidden = !state.isHost;
   restartButton.hidden = !state.isHost;
+  document.querySelector("#newVote").hidden = !state.isHost;
   resultsStep.disabled = !state.isHost;
   if (!state.isHost) {
     document.querySelector("#waitingMessage").textContent =
@@ -533,7 +589,9 @@ function addOptionRow(name = "", detail = "") {
     <input class="option-detail" type="text" maxlength="80" placeholder="Detail (optional)" />
     <button class="option-remove" type="button" aria-label="Remove option">×</button>
   `;
-  row.querySelector(".option-name").value = name;
+  const nameInput = row.querySelector(".option-name");
+  nameInput.value = name;
+  nameInput.addEventListener("paste", (event) => spreadPastedLines(nameInput, event));
   row.querySelector(".option-detail").value = detail;
   row.querySelector(".option-remove").addEventListener("click", () => {
     row.remove();
@@ -542,6 +600,37 @@ function addOptionRow(name = "", detail = "") {
   optionRows.appendChild(row);
   refreshOptionIcons();
   return row;
+}
+
+/** "- pizza", "• pizza", "3. pizza" → "pizza"; plain lines pass through. */
+function stripListMarker(line) {
+  return line.trim().replace(/^(?:[-–—•*]\s+|\d+[.)]\s*)/, "");
+}
+
+/** Pasting a multi-line list into an option name fills the ballot: the first
+ *  line stays in this row, the rest fill the empty rows below (inserting new
+ *  ones as needed) so the pasted order is kept. */
+function spreadPastedLines(input, event) {
+  const text = event.clipboardData?.getData("text") ?? "";
+  if (!/[\r\n]/.test(text)) return; // single-line paste: default behavior
+  event.preventDefault();
+  const merged = input.value.slice(0, input.selectionStart) + text + input.value.slice(input.selectionEnd);
+  const lines = merged.split(/[\r\n]+/).map(stripListMarker).filter(Boolean)
+    .map((line) => line.slice(0, input.maxLength));
+  input.value = lines.shift() ?? "";
+  let anchor = input.closest(".option-row");
+  for (const line of lines) {
+    const next = anchor.nextElementSibling;
+    if (next && !next.querySelector(".option-name").value && !next.querySelector(".option-detail").value) {
+      next.querySelector(".option-name").value = line;
+      anchor = next;
+    } else {
+      const inserted = addOptionRow(line);
+      anchor.after(inserted);
+      anchor = inserted;
+    }
+  }
+  refreshOptionIcons();
 }
 
 function refreshOptionIcons() {
@@ -557,14 +646,33 @@ function renderCreateView() {
 }
 
 function startStagedRoom(topic) {
-  state.config = { mode: "staged", topic, stage: "suggest" };
+  state.config = { mode: "staged", topic, stage: "suggest", generation: 1 };
   document.querySelector("#roomName").textContent = topic;
   document.querySelector("#suggestTopic").textContent = topic;
   readyToggle.hidden = true; // the host starts the vote instead of readying
   startVoteNow.hidden = false;
-  sendToAll({ type: "room-config", mode: "staged", topic, stage: "suggest" });
+  sendToAll({ type: "room-config", mode: "staged", topic, stage: "suggest", generation: 1 });
   renderSuggestions();
   updateReadyMeter();
+  switchView("suggest");
+}
+
+/** Host: abandon the current vote and reopen the same room at the suggest
+ *  stage (protocol v4) — every connected peer follows along. */
+function hostStartNewVote(topic) {
+  if (!state.isHost) return;
+  const generation = configGeneration() + 1;
+  resetVoteState();
+  state.config = { mode: "staged", topic, stage: "suggest", generation };
+  document.querySelector("#roomName").textContent = topic;
+  document.querySelector("#suggestTopic").textContent = topic;
+  readyToggle.hidden = true;
+  startVoteNow.hidden = false;
+  sendToAll({ type: "new-vote", mode: "staged", topic, stage: "suggest", generation });
+  renderCandidates();
+  renderSuggestions();
+  updateReadyMeter();
+  updateWaiting();
   switchView("suggest");
 }
 
@@ -732,6 +840,10 @@ document.querySelector("#restartVote").addEventListener("click", () => {
   state.revealed = false;
   renderCandidates();
   switchView("ballot");
+});
+document.querySelector("#newVote").addEventListener("click", () => {
+  const topic = (prompt("What is the group deciding next?") || "").trim() || "Group decision";
+  hostStartNewVote(topic);
 });
 document.querySelector("#addSuggestion").addEventListener("click", submitSuggestion);
 document.querySelector("#suggestName").addEventListener("keydown", (event) => {

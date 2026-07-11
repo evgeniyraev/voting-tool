@@ -17,8 +17,8 @@
     <link rel="stylesheet" href="styles.css?v=20260710-1" />
     <link rel="manifest" href="manifest.json" />
     <!-- Enable once the app ships on the App Store: fill in the App Store id.
-         This makes invite links open the ArgumentFixer App Clip on iPhones.
-    <meta name="apple-itunes-app" content="app-id=APP_STORE_ID, app-clip-bundle-id=com.zerogravityroom.argumentfixer.Clip, app-clip-display=card" />
+         This makes invite links open the Tiny Tribunal App Clip on iPhones.
+    <meta name="apple-itunes-app" content="app-id=APP_STORE_ID, app-clip-bundle-id=com.zerogravityroom.tinytribunal.Clip, app-clip-display=card" />
     -->
   </head>
   <body>
@@ -253,7 +253,8 @@
             <p>When an option is eliminated, each ballot moves to its next available preference.</p>
           </div>
           <div class="rounds-list" id="roundsList"></div>
-          <button class="secondary-button" id="restartVote">Start a new ballot</button>
+          <button class="primary-button compact" id="newVote">Start a new vote</button>
+          <button class="secondary-button" id="restartVote">Vote again on the same options</button>
         </div>
       </section>
     </main>
@@ -270,6 +271,6 @@
     <div class="toast" id="toast" role="status"></div>
     <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
     <script src="https://unpkg.com/qrcodejs@1.0.0/qrcode.min.js"></script>
-    <script src="app.js?v=20260710-1"></script>
+    <script src="app.js?v=20260711-1"></script>
   </body>
 </html>

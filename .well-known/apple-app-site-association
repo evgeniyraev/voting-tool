@@ -1,12 +1,12 @@
 {
   "appclips": {
-    "apps": ["4F5J749858.com.zerogravityroom.argumentfixer.Clip"]
+    "apps": ["4F5J749858.com.zerogravityroom.tinytribunal.Clip"]
   },
   "applinks": {
     "apps": [],
     "details": [
       {
-        "appIDs": ["4F5J749858.com.zerogravityroom.argumentfixer"],
+        "appIDs": ["4F5J749858.com.zerogravityroom.tinytribunal"],
         "components": [
           { "/": "/voting-tool/*" },
           { "/": "/voting-tool/" }

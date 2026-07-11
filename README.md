@@ -17,7 +17,7 @@ single-winner transferable vote count.
 
 Peers exchange JSON messages over PeerJS data connections opened with
 `{ reliable: true, serialization: "json" }` (native clients such as the
-ArgumentFixer iOS app speak the same protocol):
+Tiny Tribunal iOS app speak the same protocol):
 
 - `{ "type": "room-info", "topic": string, "candidates": [{ "id", "name", "detail", "icon", "color" }] }`
   — sent by the host when the vote is defined; only the host is trusted for it.
@@ -58,7 +58,7 @@ and independent security review.
 ## Apple App Clip / Universal Links
 
 `.well-known/apple-app-site-association` associates this tool with the
-ArgumentFixer iOS app so invite links can open the app or its App Clip.
+Tiny Tribunal iOS app so invite links can open the app or its App Clip.
 Two deployment caveats:
 
 1. The file must be served from the **domain root**
@@ -72,6 +72,6 @@ Two deployment caveats:
    controlled.
 
 The file carries team id `4F5J749858` and bundle id
-`com.zerogravityroom.argumentfixer` — keep it in sync with the app project's
+`com.zerogravityroom.tinytribunal` — keep it in sync with the app project's
 `Config.xcconfig`. Uncomment the `apple-itunes-app` meta tag in `index.html`
 once the app is on the App Store.
