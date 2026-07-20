@@ -49,6 +49,14 @@ const readyMeter = document.querySelector("#readyMeter");
 const startVoteNow = document.querySelector("#startVoteNow");
 const HOST_STORAGE_KEY = "common-ground-host-id";
 let selectedMode = "classic";
+/** True while this client is racing other clients for an abandoned host id. */
+let claimingHostId = false;
+/** Bounded so a permanently unreachable room stops flip-flopping roles. */
+let takeoverAttempts = 0;
+const MAX_TAKEOVER_ATTEMPTS = 6;
+/** Generous: a real host behind TURN can take several seconds to open. */
+const HOST_CONNECT_TIMEOUT_MS = 10000;
+let createViewRendered = false;
 
 function candidates() {
   return state.room ? state.room.candidates : [];
@@ -467,9 +475,32 @@ function updatePeerCount() {
     ` anonymous peer${connected === 1 ? "" : "s"} connected`;
 }
 
+/** PeerJS does not emit "close" when a peer's page simply goes away, so a
+ *  vanished host would otherwise look connected forever. The ICE transport
+ *  giving up is the signal that actually arrives. */
+function watchIceState(connection, onLost) {
+  const pc = connection.peerConnection;
+  if (!pc) return;
+  pc.addEventListener("iceconnectionstatechange", () => {
+    if (pc.iceConnectionState !== "failed" && pc.iceConnectionState !== "closed") return;
+    connection.close();
+    onLost();
+  });
+}
+
 function registerConnection(connection) {
   if (state.peers.has(connection.peer)) return;
   state.peers.set(connection.peer, connection);
+  const dropped = () => {
+    if (!state.peers.has(connection.peer)) return;
+    state.peers.delete(connection.peer);
+    updatePeerCount();
+    updateReadyMeter();
+    maybeAutoStartVote();
+    maybeAutoReveal();
+    // The host left the room behind — claim it so the vote can carry on.
+    if (!state.isHost && connection.peer === state.hostId) attemptHostTakeover();
+  };
   connection.on("open", () => {
     connection.send({
       type: "sync",
@@ -482,30 +513,87 @@ function registerConnection(connection) {
     });
     updatePeerCount();
     updateReadyMeter();
+    watchIceState(connection, dropped);
   });
   connection.on("data", (message) => {
     const carriedNews = receivePeerMessage(message, connection.peer);
     if (carriedNews && RELAY_TYPES.has(message.type)) sendToAll(message, connection.peer);
   });
-  connection.on("close", () => {
-    state.peers.delete(connection.peer);
-    updatePeerCount();
-    updateReadyMeter();
-    maybeAutoStartVote();
-    maybeAutoReveal();
-  });
-  connection.on("error", () => {
-    state.peers.delete(connection.peer);
-    updatePeerCount();
-    updateReadyMeter();
-    maybeAutoStartVote();
-    maybeAutoReveal();
-  });
+  connection.on("close", dropped);
+  connection.on("error", dropped);
 }
 
 function connectToPeer(peerId) {
   if (!peerId || peerId === state.peerId || state.peers.has(peerId)) return;
-  registerConnection(state.peer.connect(peerId, { reliable: true, serialization: "json" }));
+  const connection = state.peer.connect(peerId, { reliable: true, serialization: "json" });
+  registerConnection(connection);
+  if (state.isHost || peerId !== state.hostId) return;
+  // A host that left keeps its id registered on the signalling server for a
+  // while, so dialling it is accepted and then silently never opens — no
+  // "peer-unavailable" ever arrives. A host that never answers is an empty
+  // room too, so time the dial out and claim it.
+  setTimeout(() => {
+    if (connection.open || state.isHost) return;
+    state.peers.delete(peerId);
+    updatePeerCount();
+    attemptHostTakeover();
+  }, HOST_CONNECT_TIMEOUT_MS);
+}
+
+/** Tears the signalling peer down so setupPeerChannel can rebuild it in the
+ *  other role. Peer ids are released as soon as the peer is destroyed. */
+function restartPeerChannel(asHost) {
+  if (state.peer) state.peer.destroy();
+  state.peers.clear();
+  state.peer = null;
+  state.peerId = null;
+  state.isHost = asHost;
+  if (!asHost) configureRoleUI();
+  updatePeerCount();
+  // Out of the current error/close handler before rebuilding.
+  setTimeout(setupPeerChannel, 0);
+}
+
+/** Nobody is holding this room's host id, so the room is empty: claim the id
+ *  ourselves. The invite link keeps working and later joiners land on us. */
+function attemptHostTakeover() {
+  if (state.isHost || claimingHostId) return;
+  if (takeoverAttempts >= MAX_TAKEOVER_ATTEMPTS) return showHostOffline();
+  claimingHostId = true;
+  connectionStatus.textContent = "Claiming room";
+  // A host that never showed up leaves its id free, so the first try lands
+  // immediately. A host that *left* keeps its id reserved on the signalling
+  // server for a while, so back off and let the reservation lapse. The jitter
+  // also stops several waiting clients from all grabbing at the same instant.
+  const delay = Math.min(500 * 2 ** takeoverAttempts, 16000) + Math.random() * 800;
+  takeoverAttempts += 1;
+  setTimeout(() => restartPeerChannel(true), delay);
+}
+
+/** Promotion succeeded — surface the host controls this client never had. */
+function finishHostTakeover() {
+  claimingHostId = false;
+  configureRoleUI();
+  if (state.room || state.config) {
+    showToast("The host left — you are hosting this room now");
+    return;
+  }
+  document.querySelector("#roomName").textContent = "Your room";
+  if (!createViewRendered) {
+    createViewRendered = true;
+    renderCreateView();
+  }
+  switchView("create");
+  showToast("This room was empty — you are hosting it now");
+}
+
+function showHostOffline() {
+  claimingHostId = false;
+  connectionStatus.textContent = "Host offline";
+  copyRoomButton.disabled = false;
+  copyRoomButton.textContent = "Start new room";
+  showQrButton.disabled = true;
+  showToast("Room host is no longer online");
 }
 
 function setupPeerChannel() {
@@ -521,6 +609,7 @@ function setupPeerChannel() {
       state.hostId = peerId;
       sessionStorage.setItem(HOST_STORAGE_KEY, peerId);
       writeRoomLink();
+      if (claimingHostId) finishHostTakeover();
     } else {
       connectToPeer(state.hostId);
     }
@@ -537,11 +626,20 @@ function setupPeerChannel() {
   });
   state.peer.on("error", (error) => {
     if (error.type === "peer-unavailable") {
-      connectionStatus.textContent = "Host offline";
-      copyRoomButton.disabled = false;
-      copyRoomButton.textContent = "Start new room";
-      showQrButton.disabled = true;
-      showToast("Room host is no longer online");
+      // Drop the connection that never opened, so a later retry can dial the
+      // same id again instead of being deduped against this dead entry.
+      state.peers.delete(state.hostId);
+      updatePeerCount();
+      // The room has no host online — take it over instead of dead-ending.
+      attemptHostTakeover();
+    } else if (error.type === "unavailable-id") {
+      // The id is still registered: either another client won the race we just
+      // started, or the broker has not yet released a departed host's id. Fall
+      // back to joining — a real host answers, a stale registration times out
+      // in connectToPeer and brings us back here on a longer backoff.
+      claimingHostId = false;
+      sessionStorage.removeItem(HOST_STORAGE_KEY);
+      restartPeerChannel(false);
     } else {
       connectionStatus.textContent = "Connection issue";
       showToast("Could not connect to the room");
